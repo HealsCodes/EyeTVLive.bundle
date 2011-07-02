@@ -208,11 +208,12 @@ class EyeTVLive(object):
             total = total - len(res['channelList'])
             base = base + len(res['channelList'])
             data.extend(res['channelList'])
-        
-        if self.lofi_version:
-            data.sort(cmp=lambda x,y: int(x['displayNumber']) > int(y['displayNumber']))
-        else:
-            data.sort(cmp=lambda x,y: int(x['channelInfo']['displayNumber']) > int(y['channelInfo']['displayNumber']))
+ 
+#
+#        if self.lofi_version:
+#            data.sort(cmp=lambda x,y: int(x['displayNumber']) > int(y['displayNumber']))
+#        else:
+#            data.sort(cmp=lambda x,y: int(x['channelInfo']['displayNumber']) > int(y['channelInfo']['displayNumber']))
         self.channel_list = data
         Log('EyeTVLive: Channel list has %d items' % len(self.channel_list))
         return data

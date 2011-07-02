@@ -1,0 +1,47 @@
+[
+  {
+    "id"      : "eyetv_live_host",
+    "label"   : "EyeTV Host",
+    "type"    : "text",
+    "default" : "127.0.0.1"
+  },
+  {
+    "id"      : "eyetv_live_port",
+    "label"   : "EyeTV Port",
+    "type"    : "text",
+    "default" : "2170"
+  },
+  {
+    "id"      : "eyetv_live_client",
+    "label"   : "Client Name",
+    "type"    : "text",
+    "default" : "PMS"
+  },
+  {
+    "id"      : "eyetv_live_devid",
+    "label"   : "Client Type",
+    "type"    : "enum",
+    "values"  : ["IPHONE", "IPAD", "SAFARI"],
+    "default" : "IPAD"
+  },
+  {
+    "id"      : "eyetv_live_token",
+    "label"   : "Connect Token",
+    "type"    : "text",
+    "default" : ""
+  },
+  {
+    "id"      : "eyetv_live_token_type",
+    "label"   : "Use token provided by",
+    "type"    : "enum",
+    "values"  : ["prefs", "scanning"],
+    "default" : "prefs"
+  },
+  {
+    "id"      : "eyetv_live_scanif",
+    "label"   : "Scan on interface",
+    "type"    : "enum",
+    "values"  : ["lo0", "en0", "en1", "en2"],
+    "default" : "en1"
+  }
+]

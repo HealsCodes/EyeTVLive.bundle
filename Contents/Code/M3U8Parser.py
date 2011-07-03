@@ -220,6 +220,7 @@ class M3U8Parser(object):
         :returns: True if new data is available
         "returns: on error / False if no new data is available
         """
+        HTTP.ClearCache()
         request = HTTP.Request(url=self.url)
         try:
             request.load()

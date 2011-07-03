@@ -170,9 +170,8 @@ class EyeTVLive(object):
             args[PREFS_TOKEN] = ''
         
         try:
-            HTTP.CacheTime = 1
             HTTP.ClearCache()
-            res = JSON.ObjectFromURL(url % args, headers=self.headers, cacheTime=1)
+            res = JSON.ObjectFromURL(url % args, headers=self.headers)
             if not res:
                 return default
             return res

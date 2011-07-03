@@ -172,7 +172,7 @@ class M3U8Parser(object):
                         
                     else:
                         # unknown tag
-                        Log.Warning('M3U8Parser<%s>: unknown (k,v): %s' % (self.url, line))
+                        Log.Warn('M3U8Parser<%s>: unknown (k,v): %s' % (self.url, line))
                         (key, val) = line.split(':', 1)
                         item[key] = val
                 if state != M3U8Parser.PARSE_ERROR:

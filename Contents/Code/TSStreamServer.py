@@ -123,7 +123,10 @@ class TSStreamServer(object):
                 if ts_timeout == 0:
                     Log.Warn('TSStreamServer[producer]: no timeout in playlist defaulting to 4 sec.')
                     ts_timeout = 4 + time.time()
-                    
+            else:
+                # should help keeping CPU usage low
+                Thread.Sleep(1)
+            
             if schedule:
                 for item in schedule:
                     if not self.consumer_ready.isSet():
@@ -176,6 +179,8 @@ class TSStreamServer(object):
             data = self.ts_queue.get()
             Log.Info('TSStreamServer[consumer]: got first sequence, sending response.')
             client_conn.sendall(self.stream_request + data)
+            Log.Info('TSStreamServer[consumer]: adjusting socket timeout to 1 (was: %s)', client_conn.gettimeout())
+            client_conn.settimeout(1.0)
         except socket.error, se:
             Log.Error('TSStreamServer[consumer]: socket error: %s', se)
             return

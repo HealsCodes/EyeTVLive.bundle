@@ -40,8 +40,8 @@ URL_STREAM         = BASE_URL + '/live/stream'
 URL_TIMEZONE       = BASE_URL + '/live/timeZone/0'
 URL_FAVORITES      = BASE_URL + '/live/favorites/0/_%(eyetv_live_devid)s_FAVORITES'
 URL_CHANNEL_LIST   = BASE_URL + '/live/channels/%(epg_detail)d/0/%(item_base)d/%(item_count)d/_%(eyetv_live_devid)s_CHANNELS'
-URL_TUNE_TO_SAFARI = BASE_URL + '/live/tuneto/1/%(kbps)d/%(service_id)s/_SAFARI_PLAYER'
-URL_TUNE_TO_IDEV   = BASE_URL + '/live/tuneto/1/%(kbps)d/0/1/6/%(service_id)s/_%(eyetv_live_devid)s_PLAYER'
+URL_TUNE_TO_SAFARI = BASE_URL + '/live/tuneto/6/%(kbps)d/%(service_id)s/_SAFARI_PLAYER'
+URL_TUNE_TO_IDEV   = BASE_URL + '/live/tuneto/6/%(kbps)d/0/1/6/%(service_id)s/_%(eyetv_live_devid)s_PLAYER'
 URL_READY          = BASE_URL + '/live/ready/0/_%(eyetv_live_devid)s_PLAYER'
 #URL_RECORD_SET     = BASE_URL + '/live/schedule/1/%(show_uuid)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
 #URL_RECORD_DEL     = BASE_URL + '/live/deleteschedule/0/%(ts_start)s/_%(eyetv_live_devid)s_DETAILS'
@@ -170,7 +170,9 @@ class EyeTVLive(object):
             args[PREFS_TOKEN] = ''
         
         try:
-            res = JSON.ObjectFromURL(url % args, headers=self.headers)
+            HTTP.CacheTime = 1
+            HTTP.ClearCache()
+            res = JSON.ObjectFromURL(url % args, headers=self.headers, cacheTime=1)
             if not res:
                 return default
             return res
@@ -246,10 +248,12 @@ class EyeTVLive(object):
             kbps = 320
         elif kbps > 2000:
             kbps = 2000
+        
         if self.lofi_version or Prefs[PREFS_CLIENT] == 'SAFARI':
             res = self.run_request(URL_TUNE_TO_SAFARI, kbps=kbps, service_id=service_id)
         else:
             res = self.run_request(URL_TUNE_TO_IDEV, kbps=kbps, service_id=service_id)
+        
         if not res or not res['success']:
             d = MessageContainer(L('Internal error'), L('Failed to switch channels.'))
             return d
@@ -257,6 +261,7 @@ class EyeTVLive(object):
             # wait until ready
             stream_url = res['m3u8URL']
             res = {1:True}
+            Thread.Sleep(1.5) # don't hurry EyeTV..
             while res:
                 res = self.run_request(URL_READY)
                 if not res:
@@ -270,6 +275,7 @@ class EyeTVLive(object):
                                                 'eyetv_live_port' : Prefs[PREFS_PORT]
                                             }, stream_url)
                     if server.kickstart():
+                        Response.Headers['Cache-Control'] = 'no-cache'
                         return Redirect('http://127.0.0.1:2171/stream.mpeg')
                     else:
                         d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
@@ -431,15 +437,8 @@ class EyeTVLive(object):
                 duration = 1
             
             if mode == 'channel':
-                k = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000)
-            elif mode == 'epg':
-                k = self.epg.callback_for_channel(info['serviceID'])
-            else:
-                k = Callback(self.gui_main_menu, service_id=info['serviceID'])
-            
-            if mode == 'channel':
                 d.add(VideoClipObject(
-                      key = k,
+                      key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
                       title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
                       summary = summary
 #                      ,items = [
@@ -455,12 +454,14 @@ class EyeTVLive(object):
 #                        )
 #                      ]
                 ))
-            else:
+            elif mode == 'epg':
                 d.add(DirectoryObject(
-                    key = k,
+                    key = self.epg.callback_for_channel(info['serviceID']),
                     title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
                     summary = summary
                 ))
+            else:
+                return MessageContainer(L('Error'), L('Internal error..'))
         return d
     
     def gui_setup_menu(self):

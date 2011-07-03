@@ -138,9 +138,13 @@ class M3U8Parser(object):
                         else:
                             item[key] = val
                     
+                    elif line.startswith('EXT-X-PLAYLIST-TYPE:'):
+                        pass
+                    
                     elif line.startswith('EXT-X-ENDLIST'):
+                        item['x-endlist'] = True
                         item['endlist'] = True
-                        
+                    
                     elif line.startswith('EXT-X-STREAM-INF:'):
                         attrs = val.split(' ')[0].split(',')
                         inf = { 'program-id' : None, 'bandwidth' : None }
@@ -169,12 +173,22 @@ class M3U8Parser(object):
                                 break
                         if state != M3U8Parser.PARSE_ERROR:
                             item[key] = inf
-                        
+                    
+                    elif line.startswith('EXT-X-DISCONTINUITY'):
+                        item['x-discontinuity'] = True
+                    
+                    elif line.startswith('EXT-X-VERSION'):
+                        item[key] = val
+                    
                     else:
                         # unknown tag
                         Log.Warn('M3U8Parser<%s>: unknown (k,v): %s' % (self.url, line))
-                        (key, val) = line.split(':', 1)
-                        item[key] = val
+                        if ':' in line:
+                            (key, val) = line.split(':', 1)
+                            item[key] = val
+                        else:
+                            Log.Warn('M3U8Parser<%s>: line was droped (no k,v)')
+                    
                 if state != M3U8Parser.PARSE_ERROR:
                     state = M3U8Parser.PARSE_FETCH
                 

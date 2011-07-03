@@ -1,0 +1,57 @@
+{
+    "Channels" : "Channels",
+    "EPG" : "EPG",
+    "Setup" : "Setup",
+    "Settings" : "Settings",
+    "Preferences" : "Preferences",
+    "Start EyeTV" : "Start EyeTV",
+    "Scan for connection token" : "Scan for connection token",
+    "(Local tools are disabled)" : "(Local tools are disabled)",
+
+    "EPG details" : "EPG details",
+    "Watch %s" : "Watch %s",
+    "Record" : "Record",
+    "Sorry, recording a show is not quiet implemented in this version." : "Sorry, recording a show is not quiet implemented in this version.",
+        
+    "Playing:" : "Playing:",
+    "Up next:" : "Up next:",
+    "Director: " : "Director: ",
+    "Actors: " : "Actors: ",
+    "Produced in: " : "Produced in: ",
+    "<No details available>" : "<No details available>",
+    "never" : "never",
+    "offline" : "offline",
+
+    "Error" : "Error",
+    "Unable to fetch EPG data." : "Unable to fetch EPG data.",
+
+
+    "Configuration Error" : "Configuration Error",
+    "Invalid host/port configuration." : "Invalid host/port configuration.",
+    "Invalid port - value must be numeric." : "Invalid port - value must be numeric.",
+    "No connect token specified.\n\nAdvanced features will be disabled." : "No connect token specified.\n\nAdvanced features will be disabled.",
+    "No connect token stored, please start the token scan.\n\nAdvanced features will be disabled" : "No connect token stored, please start the token scan.\n\nAdvanced features will be disabled",
+    
+    "Internal error" : "Internal error",
+    "Failed to switch channels." : "Failed to switch channels.",    
+    "EyeTV failed to switch channels." : "EyeTV failed to switch channels.",
+    "Failed to collect the stream." : "Failed to collect the stream.",
+    "Failed to launch EyeTV: %d" : "Failed to launch EyeTV: %d",
+    "Failed to launch EyeTV: %s" : "Failed to launch EyeTV: %s",
+    "Failed..\nNo token was scanned." : "Failed..\nNo token was scanned.",
+    "Scanner terminated early - please try another network interface!" : "Scanner terminated early - please try another network interface!",
+    "Failed..\nNo token was scanned." : "Failed..\nNo token was scanned.",
+    "Failed..\nInternal error: %s" : "Failed..\nInternal error: %s",
+    "Could not connect to EyeTV!" : "Could not connect to EyeTV!",
+    "EyeTV is runnig but streaming is disabled." : "EyeTV is runnig but streaming is disabled.",
+    
+    "EyeTV should be running now." : "EyeTV should be running now.",
+    "Success!\nYour token is:\n%s" : "Success!\nYour token is:\n%s",
+    
+    "Unable to fetch the channel list" : "Unable to fetch the channel list",
+    
+    "This will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!" :     "This will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!",
+    "Try to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)" :     "Try to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)"
+}
+
+

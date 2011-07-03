@@ -83,13 +83,13 @@ class EyeTVLive(object):
             if not Prefs[PREFS_HOST] or not Prefs[PREFS_PORT]:
                 Log.Info('EyeTV: validate_prefs: host/port invalid')
                 if force_valid:
-                    raise RuntimeError('Invalid host/port configuration.')
+                    raise RuntimeError(L('Invalid host/port configuration.'))
             try:
                 v = long(Prefs[PREFS_PORT])
             except ValueError:
                 Log.Info('EyeTV: validate_prefs: port is not numeric')
                 if force_valid:
-                    raise RuntimeError('Invalid port - value must be numeric.')
+                    raise RuntimeError(L('Invalid port - value must be numeric.'))
                     
             # check for local connection (this needs improvement..)
             try:
@@ -98,6 +98,26 @@ class EyeTVLive(object):
                     self.local_connect = True
                 else:
                     self.local_connect = False
+                
+                if not self.local_connect:
+                    # try to resolve the ip if it's a hostname
+                    try:
+                        ip = socket.gethostbyname(Prefs[PREFS_HOST])
+                    except socket.error,e:
+                        # it's either an ip or we couldn't resolve the hostname..
+                        ip = Prefs[PREFS_HOST]
+                    try:
+                        # try to match the ip against all configured network ips
+                        import commands
+                        all_ips = commands.getoutput('/sbin/ifconfig | awk \'/inet6?/{ print $2 }\'')
+                        
+                        for if_ip in all_ips.split('\n'):
+                            if ip == if_ip:
+                                self.local_connect = True
+                                break
+                    except ImportError:
+                        pass
+                
                 Log.Info("EyeTV: validate_prefs: local_connect=%d", self.local_connect)
             except socket.error, e:
                 Log.Error("EyeTV: validate_prefs: could not determine local_connect: %s", e)
@@ -111,7 +131,7 @@ class EyeTVLive(object):
                     self.epg.reset()
                     self.channel_list = []
                     if force_valid:
-                        raise RuntimeError('No connect token specified.\n\nAdvanced features will be disabled.')
+                        raise RuntimeError(L('No connect token specified.\n\nAdvanced features will be disabled.'))
                 else:
                     self.lofi_version = False
                     self.headers['X-EyeConnect-Token'] = Prefs[PREFS_TOKEN]
@@ -122,13 +142,13 @@ class EyeTVLive(object):
                     self.epg.reset()
                     self.channel_list = []
                     if force_valid:
-                        raise RuntimeError('No connect token stored, please start the token scan.\n\nAdvanced features will be disabled')
+                        raise RuntimeError(L('No connect token stored, please start the token scan.\n\nAdvanced features will be disabled'))
                 else:
                     self.lofi_version = False
                     self.headers['X-EyeConnect-Token'] = Dict[PREFS_TOKEN]
             Log('EyeTV: validate_prefs: valid, lofi_version=%d', self.lofi_version)
         except RuntimeError, e:
-            d = MessageContainer('Configuration Error', str(e))
+            d = MessageContainer(L('Configuration Error'), str(e))
             return d
     
     def run_request(self, url, default=None, **kwargs):
@@ -231,7 +251,7 @@ class EyeTVLive(object):
         else:
             res = self.run_request(URL_TUNE_TO_IDEV, kbps=kbps, service_id=service_id)
         if not res or not res['success']:
-            d = MessageContainer('Internal error', 'Failed to switch channels.')
+            d = MessageContainer(L('Internal error'), L('Failed to switch channels.'))
             return d
         else:
             # wait until ready
@@ -240,7 +260,7 @@ class EyeTVLive(object):
             while res:
                 res = self.run_request(URL_READY)
                 if not res:
-                    d = MessageContainer('Internal error', 'EyeTV failed to switch channels.')
+                    d = MessageContainer(L('Internal error'), L('EyeTV failed to switch channels.'))
                     return d
                 if res['isReadyToStream']:
                     Log.Debug('EyeTVLive: stream is ready, manifesting server..')
@@ -252,7 +272,7 @@ class EyeTVLive(object):
                     if server.kickstart():
                         return Redirect('http://127.0.0.1:2171/stream.mpeg')
                     else:
-                        d = MessageContainer('Internal error', 'Failed to collect the stream.')
+                        d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
                         return d
                 else:
                     Log.Debug('EyeTVLive: buffering stream (%f/%f)..',
@@ -265,11 +285,11 @@ class EyeTVLive(object):
             spawner = Helper.Process('SpawnEyeTV')
             spawner.wait()
             if spawner.returncode != 0:
-                d.message = 'Failed to launch EyeTV: %d' % spawner.returncode
+                d.message = F('Failed to launch EyeTV: %d', spawner.returncode)
             else:
-                d.message = 'EyeTV should be running now.'
+                d.message = F('EyeTV should be running now.')
         except Exception,e:
-            d.message = 'Failed to launch EyeTV: %s' % e
+            d.message = F('Failed to launch EyeTV: %s', e)
         return d
     
     def tokenscan(self):
@@ -283,14 +303,16 @@ class EyeTVLive(object):
                 token=re.search('(?m).*([0-9a-fA-F]{32,32}).*', err)
                 if token:
                     Dict[PREFS_TOKEN] = token.groups()[0]
-                    d.message = 'Success!\nYour token is:\n%s' % Dict[PREFS_TOKEN]
+                    d.message = F('Success!\nYour token is:\n%s', Dict[PREFS_TOKEN])
                     Dict['last_scan_on'] = '%s, %s' % (Prefs[PREFS_HOST], time.ctime())
                 else:
-                    d.message = 'Failed..\nNo token was scanned.'
+                    d.message = L('Failed..\nNo token was scanned.')
+            elif scanner.returncode == 2:
+                d.message = L('Scanner terminated early - please try another network interface!')
             else:
-                d.message = 'Failed..\nNo token was scanned.'
+                d.message = L('Failed..\nNo token was scanned.')
         except Exception, e:
-            d.message = 'Failed..\nInternal error: %s' % e
+            d.message = F('Failed..\nInternal error: %s', e)
         return d
     
     # -- gui code
@@ -309,27 +331,27 @@ class EyeTVLive(object):
             status = self.run_request(URL_STATUS)
         
         if not status:
-            d.title2='offline'
-            d.header = 'Internal error'
-            d.message = 'Could not connect to EyeTV!'
+            d.title2= L('offline')
+            d.header = L('Internal error')
+            d.message = L('Could not connect to EyeTV!')
         elif not status['isUp']:
-            d.title2='offline'
-            d.header = 'Internal error'
-            d.message = 'EyeTV is runnig but streaming is disabled.'
+            d.title2= L('offline')
+            d.header = L('Internal error')
+            d.message = L('EyeTV is runnig but streaming is disabled.')
         else:
             d.title2='%s' % Prefs[PREFS_HOST]
             d.Append(DirectoryItem(
                 key = Callback(self.gui_channel_list, mode='channel'),
-                title ='Channels'
+                title = L('Channels')
             ))
             if not self.lofi_version:
                 d.Append(DirectoryItem(
                     key = Callback(self.gui_channel_list, mode='epg'),
-                    title = 'EPG'
+                    title = L('EPG')
                 ))
         d.Append(DirectoryItem(
             key = Callback(self.gui_setup_menu),
-            title = 'Setup'
+            title = L('Setup')
         ))
 
 #        d = ObjectContainer(title1="EyeTV", view_group='Category')
@@ -371,10 +393,10 @@ class EyeTVLive(object):
         """
         self.fetch_channel_list()
         if not self.channel_list:
-            d = MessageContainer('Internal error', 'Unable to fetch the channel list')
+            d = MessageContainer(L('Internal error'), L('Unable to fetch the channel list'))
             return d
         
-        d = ObjectContainer(title2='Channels', view_group='Details')
+        d = ObjectContainer(title2=L('Channels'), view_group='Details')
         for channel in self.channel_list:
             if self.lofi_version:
                 info = channel
@@ -389,7 +411,7 @@ class EyeTVLive(object):
             if epg:
                 tagline = ' - %s' % (epg[0]['TITLE'])
                 summary = '%s\n\n%s-%s %s\n"%s"\n\n' % (
-                    'Playing:',
+                    L('Playing:'),
                     time.strftime('%H:%M', time.localtime(epg[0]['STARTTIME'])),
                     time.strftime('%H:%M', time.localtime(epg[0]['STOPTIME'])),
                     epg[0]['TITLE'],
@@ -397,7 +419,7 @@ class EyeTVLive(object):
                 )
                 if len(epg) >= 2:
                     summary += '%s\n\n%s-%s %s\n' % (
-                        'Up next:',
+                        L('Up next:'),
                         time.strftime('%H:%M', time.localtime(epg[1]['STARTTIME'])),
                         time.strftime('%H:%M', time.localtime(epg[1]['STOPTIME'])),
                         epg[1]['TITLE'],
@@ -446,17 +468,16 @@ class EyeTVLive(object):
         Setup sub-menu, a place for tools and configuration..
         (and a clever hack to force the main menu to reload!)
         """
-        d = ObjectContainer(title1='Settings')
-        if self.local_connect:
-            if 'last_scan_on' in Dict:
-                scan_info = Dict['last_scan_on']
-            else:
-                scan_info = 'never'
-            
-            d.add(DirectoryObject(
-                key = Callback(self.tokenscan), 
-                title = 'Scan for connection token',
-                summary = """
+        d = ObjectContainer(title1=L('Settings'))
+        if 'last_scan_on' in Dict:
+            scan_info = Dict['last_scan_on']
+        else:
+            scan_info = L('never')
+        
+        d.add(DirectoryObject(
+            key = Callback(self.tokenscan), 
+            title = L('Scan for connection token'),
+            summary = F("""
 This will launch the tokenscanner 
 which will listen to your local network (%s).
 
@@ -466,22 +487,24 @@ desired EyeTV.
 
 Last Scan: %s
 
-NOTE: This will only work for EyeTV an LAN or on the same machine as Plex!""" % \
-                (Prefs[PREFS_SCANIF], scan_info),
-            ))
+NOTE: This will only work for EyeTV an LAN or on the same machine as Plex!""",
+            Prefs[PREFS_SCANIF], scan_info),
+        ))
+        
+        if self.local_connect:
             d.add(DirectoryObject(
                 key = Callback(self.kickstart), 
-                title = 'Start EyeTV',
-                summary = """
+                title = L('Start EyeTV'),
+                summary = L("""
 Try to start the local EyeTV in server mode.
 (This works only if Plex and EyeTV are on the some machine)
-"""
+""")
             ))
         else:
             d.add(DirectoryObject(
                 key = Callback(self.gui_setup_menu),
-                title = '(Local tools are disabled)'
+                title = L('(Local tools are disabled)')
             ))
-        d.add(PrefsObject(title='Preferences'))
+        d.add(PrefsObject(title=L('Preferences')))
         return d
         

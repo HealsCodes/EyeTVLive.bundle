@@ -164,13 +164,13 @@ class EPGParser(object):
                  duration,
                  time.strftime('%c', time.localtime(self.ts_nsdate_to_unix(show['STARTTIME']))),
                  detail.get('DESCRIPTION', '-'),
-                 'Director: ' + detail.get('DIRECTOR', '-'),
-                 'Actors: ' + detail.get('OTHERS', '-'),
-                 'Produced in: ' + detail.get('COUNTRY', '-'),
+                 L('Director: ') + detail.get('DIRECTOR', '-'),
+                 L('Actors: ') + detail.get('OTHERS', '-'),
+                 L('Produced in: ') + detail.get('COUNTRY', '-'),
                  detail.get('YEAR', '')
             )
         else:
-            summary = '<No details available>'
+            summary = L('<No details available>')
         title = '%s-%s %s' % (
             time.strftime('%H:%M', time.localtime(show['STARTTIME'])),
             time.strftime('%H:%M', time.localtime(show['STOPTIME'])),
@@ -229,7 +229,7 @@ class EPGParser(object):
                 d.add(s)
             return d
         else:
-            d = MessageContainer('Error', 'Unable to fetch EPG data.')
+            d = MessageContainer(L('Error'), L('Unable to fetch EPG data.'))
         return d
     
     def gui_epg_for_show(self, service_id, uniqueid):
@@ -238,11 +238,11 @@ class EPGParser(object):
         self.epg_lock.release()
         show_dict = dict([(str(x['UNIQUEID']), x) for x in self.filter_data(channel_data['EPGData'])])
         if not uniqueid in show_dict:
-            return MessageContainer('Error', 'Unable to fetch EPG data.')
+            return MessageContainer(L('Error'), L('Unable to fetch EPG data.'))
         
         show = show_dict[uniqueid]
         detail = self.format_detail_data(show)
-        d = ObjectContainer(title2='EPG details', view_group='Details')
+        d = ObjectContainer(title2=L('EPG details'), view_group='Details')
         d.add(DirectoryObject(
                 key = Callback(self.gui_epg_for_show, service_id=service_id, uniqueid=uniqueid),
                 title = detail['title'],
@@ -252,12 +252,12 @@ class EPGParser(object):
         ))
         d.add(VideoClipObject(
                 key = Callback(self.delegate.tune_to, service_id=service_id, kbps=20000),
-                title = 'Watch %s' % channel_data['channelInfo']['name'],
+                title = F('Watch %s', channel_data['channelInfo']['name']),
         ))
         d.add(DirectoryObject(
                 key = Callback(self.gui_epg_for_show, service_id=service_id, uniqueid=uniqueid),
-                title = 'Record',
-                summary = 'Sorry, recording a show is not quiet implemented in this version.'
+                title = L('Record'),
+                summary = L('Sorry, recording a show is not quiet implemented in this version.')
         ))
         return d
     

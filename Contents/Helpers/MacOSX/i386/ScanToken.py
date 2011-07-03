@@ -36,6 +36,7 @@ class ScanToken(object):
         self._timeout = timeout
         self._expr = re.compile(ScanToken._CONNECT_TOKEN_EXP)
         self.token = ''
+        self.returncode = 0
     
     def run(self):
         try:
@@ -56,15 +57,19 @@ class ScanToken(object):
                         self.token = res.groups()[1]
                         break
                 tcpdump.poll()
-                if tcpdump.returncode:
+                if tcpdump.returncode is not None:
                     break
             
             tcpdump.poll()
-            if not tcpdump.returncode:
+            if tcpdump.returncode is None:
                 os.kill(tcpdump.pid, signal.SIGTERM)
+                self.returncode = 0
+            else:
+                print 'TcpDump has terminated with exitcode %d!' % tcpdump.returncode
+                self.returncode = tcpdump.returncode
         except OSError, e:
-            print str(e)
-            return
+            print 'TcpDump error: %s' % str(e)
+            self.returncode = 2
 
 
 if __name__ == '__main__':
@@ -100,8 +105,12 @@ if __name__ == '__main__':
     scanner = ScanToken(opts['-i'], opts['-t'])
     scanner.run()
     if not scanner.token:
-        print 'Sorry no token found - timeout.'
-        sys.exit(1)
+        if scanner.returncode == 0:
+            print 'Sorry no token found - timeout.'
+            sys.exit(1)
+        elif scanner.returncode >= 1:
+            print 'TcpDump has terminated by itself - maybe you should try "-i enX" (with X != 1)'
+            sys.exit(2)
     else:
         sys.stderr.write('%s\n' % scanner.token)
         sys.exit(0)

@@ -216,7 +216,7 @@ class EPGParser(object):
             self.epg_lock.release()
             
             self.compact_cache()
-            d = ObjectContainer(title2 = channel_data['channelInfo']['name'], view_group='Channel')
+            d = ObjectContainer(title2 = channel_data['channelInfo']['name'], view_group='Category')
             for show in self.filter_data(channel_data['EPGData']):
                 detail = self.format_detail_data(show)
                 s = DirectoryObject(

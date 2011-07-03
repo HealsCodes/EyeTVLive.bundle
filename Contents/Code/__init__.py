@@ -22,10 +22,12 @@ from EyeTVLive import EyeTVLive
 def Start():
     global eyetv_live_service
     eyetv_live_service = EyeTVLive()
+    
     Plugin.AddPrefixHandler('/video/eyetv-live', eyetv_live_service.gui_main_menu, 'EyeTV live')
     Plugin.AddViewGroup('Category', viewMode='List', mediaType='items')
     Plugin.AddViewGroup('Details', viewMode='InfoList', mediaType='items')
     
+    HTTP.Headers['Cache-Control'] = 'no-cache'
     ObjectContainer.title1 = 'EyeTV live'
     ObjectContainer.content = ContainerContent.GenericVideos
 

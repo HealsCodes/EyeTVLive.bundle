@@ -139,7 +139,7 @@ class M3U8Parser(object):
                             item[key] = val
                     
                     elif line.startswith('EXT-X-PLAYLIST-TYPE:'):
-                        pass
+                        item[key] = val
                     
                     elif line.startswith('EXT-X-ENDLIST'):
                         item['x-endlist'] = True

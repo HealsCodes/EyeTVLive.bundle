@@ -22,8 +22,12 @@
 	<string>MacOSX</string>
 	<key>PlexFrameworkVersion</key>
 	<string>2</string>
+	<!-- 
+	We need to use daemon mode or PMS will put us to sleep stopping all streams
+	See: http://forums.plexapp.com/index.php/topic/27971-stop-pms-from-sending-plugins-to-sleep/page__view__findpost__p__179779
+	-->
 	<key>PlexPluginMode</key>
-	<string>AlwaysOn</string>
+	<string>Daemon</string>
 	<key>PlexPluginCodePolicy</key>
 	<string>Elevated</string>
 	<!--

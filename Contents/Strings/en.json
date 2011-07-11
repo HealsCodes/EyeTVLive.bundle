@@ -50,8 +50,10 @@
     
     "Unable to fetch the channel list" : "Unable to fetch the channel list",
     
-    "This will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!" :     "This will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!",
-    "Try to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)" :     "Try to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)"
+    "\nThis will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!\n" :     "This will launch the tokenscanner\nwhich will listen to your local network (%s).\n\nAfter selecting the item please use your\niPhone/Pad/Pod and browse the EPG of the\ndesired EyeTV.\n\nLast Scan: %s\n\nNOTE: This will only work for EyeTV an LAN or on the same machine as Plex!",
+    "\nTry to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)\n" :     "Try to start the local EyeTV in server mode.\n(This works only if Plex and EyeTV are on the some machine)",
+
+    "\n             EyeTV live for Plex\n(c) 2010 Rene Koecher, some rights reserved\n--------------------------------------------\nEyeTV live core: %s\n      EPGParser: %s\n     M3U8Parser: %s\n TSStreamServer: %s\n--------------------------------------------\n" : "             EyeTV live for Plex\n(c) 2010 Rene Koecher, some rights reserved\n--------------------------------------------\nEyeTV live core: %s\n      EPGParser: %s\n     M3U8Parser: %s\n TSStreamServer: %s\n--------------------------------------------\n"
 }
 
 

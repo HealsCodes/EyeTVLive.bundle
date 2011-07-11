@@ -29,6 +29,8 @@ URL_EPG_SHOW_INFO   = ''
 #URL_RECORD_DEL      = ''
 
 class EPGParser(object):
+    VERSION = '0.2'
+    
     def __init__(self, request_delegate, base_url, url_channel, url_show):#, url_rec, url_del, url_rec_info):
         global URL_EPG_REQUEST
         URL_EPG_REQUEST = url_channel

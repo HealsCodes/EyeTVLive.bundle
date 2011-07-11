@@ -25,6 +25,8 @@ class M3U8Parser(object):
     PARSE_FETCH  = 3
     PARSE_ERROR  = 99
     
+    VERSION = '0.3'
+    
     def __init__(self, m3u8_url):
         self.url = m3u8_url
         self.my_data = ''
@@ -220,7 +222,7 @@ class M3U8Parser(object):
         :returns: True if new data is available
         "returns: on error / False if no new data is available
         """
-        HTTP.ClearCache()
+        #HTTP.ClearCache()
         request = HTTP.Request(url=self.url)
         try:
             request.load()

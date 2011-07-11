@@ -23,6 +23,7 @@ import time
 import socket
 
 from EPGParser import EPGParser
+from M3U8Parser import M3U8Parser
 from TSStreamServer import TSStreamServer
 
 PREFS_HOST         = 'eyetv_live_host'
@@ -32,6 +33,7 @@ PREFS_CLIENT       = 'eyetv_live_client'
 PREFS_TOKEN        = 'eyetv_live_token'
 PREFS_TOKEN_TYPE   = 'eyetv_live_token_type'
 PREFS_SCANIF       = 'eyetv_live_scanif'
+PREFS_USE_CHUNKED  = 'eyetv_live_chunked'
 
 BASE_URL           = 'http://%(eyetv_live_host)s:%(eyetv_live_port)s'
 URL_STATUS         = BASE_URL + '/live/status/0/_%(eyetv_live_devid)s_MAINMENU'
@@ -49,6 +51,8 @@ URL_EPG_REQUEST    = BASE_URL + '/epg/request/0/%(ts_start)d/%(ts_end)d/%(servic
 URL_EPG_SHOW_INFO  = BASE_URL + '/epg/info/1/%(show_uuid)s/_%(eyetv_live_devid)s_EPG'
 
 class EyeTVLive(object):
+    VERSION = '$git$'
+    
     def __init__(self):
         Log('Creating EyTVLive service..')
         
@@ -64,6 +68,7 @@ class EyeTVLive(object):
             'X-EyeConnect-Client' : 'iPhoneApp1',
             'X-EyeConnect-Token'  : '',
             'X-Device-Name'       : Prefs[PREFS_CLIENT],
+            'X-App-UUID'          : '',
             'Accept-Encoding'     : 'gzip, deflate',
             'Connection'          : 'keep-alive',
         }
@@ -79,6 +84,20 @@ class EyeTVLive(object):
         Validate the user settings returning an error message if requested.
         """
         try:
+            if Prefs[PREFS_CLIENT] == 'IPAD':
+                self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
+                self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
+                Log.Info('EyeTV: validate_prefs: iPad client settings')
+            elif Prefs[PREFS_CLIENT] == 'IPHONE':
+                self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/485.13.9 Darwin/11.0.0'
+                self.headers['X-App-UUID'] = '9735687db77159a0396d68a925433ec8'
+                Log.Info('EyeTV: validate_prefs: iPhone client settings')
+            else:
+                self.headers['X-Safari']   = 'yes'
+                #self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
+                #self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
+                Log.Info('EyeTV: validate_prefs: Safari client settings')
+            
             # first error will bail out
             if not Prefs[PREFS_HOST] or not Prefs[PREFS_PORT]:
                 Log.Info('EyeTV: validate_prefs: host/port invalid')
@@ -170,7 +189,7 @@ class EyeTVLive(object):
             args[PREFS_TOKEN] = ''
         
         try:
-            HTTP.ClearCache()
+#            HTTP.ClearCache()
             res = JSON.ObjectFromURL(url % args, headers=self.headers)
             if not res:
                 return default
@@ -268,7 +287,9 @@ class EyeTVLive(object):
                     return d
                 if res['isReadyToStream']:
                     Log.Debug('EyeTVLive: stream is ready, manifesting server..')
-                    server = TSStreamServer(URL_STREAM % { 
+                    #server = TSStreamServer(Prefs[PREFS_USE_CHUNKED],
+                    server = TSStreamServer(False,
+                                            URL_STREAM % { 
                                                 'service_id' : service_id,
                                                 'eyetv_live_host' : Prefs[PREFS_HOST],
                                                 'eyetv_live_port' : Prefs[PREFS_PORT]
@@ -506,5 +527,20 @@ Try to start the local EyeTV in server mode.
                 title = L('(Local tools are disabled)')
             ))
         d.add(PrefsObject(title=L('Preferences')))
+        d.add(DirectoryObject(key = Callback(self.gui_setup_menu), title=''))
+        d.add(DirectoryObject(
+            key = Callback(self.gui_setup_menu),
+            title='About',
+            summary = F("""
+         EyeTV live for Plex
+(c) 2010 Rene Koecher, some rights reserved
+--------------------------------------------
+EyeTV live core: %s
+      EPGParser: %s
+     M3U8Parser: %s
+ TSStreamServer: %s
+--------------------------------------------
+""", EyeTVLive.VERSION, EPGParser.VERSION, M3U8Parser.VERSION, TSStreamServer.VERSION)
+        ))
         return d
         

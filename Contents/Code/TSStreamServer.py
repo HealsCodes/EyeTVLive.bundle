@@ -29,16 +29,25 @@ except ImportError:
     import Queue as queue
 
 class TSStreamServer(object):
-    def __init__(self, base_url, m3u_url):
+    VERSION = '0.3c with chunked transfer'
+    
+    def __init__(self, chunked_http, base_url, m3u_url):
         self.url = base_url
         self.m3u_root = self.url + '/' + m3u_url
         self.m3u_root = self.m3u_root.rsplit('/', 1)[0]
         self.ts_queue = queue.Queue()
         self.producer_ready = Thread.Event()
         self.consumer_ready = Thread.Event()
+        self.use_chunked = chunked_http
         self.m3u_parser = M3U8Parser(self.url + '/' + m3u_url)
-        self.stream_request = 'HTTP\\1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Transfer-Encoding: binary\r\nConnection: keep-alive\r\n\r\n'
-    
+        if chunked_http:
+            Log.Info('TSStreamServer: using chunked transfer mode')
+            self.stream_request = 'HTTP\\1.1 200 OK\r\nContent-Type: video/mp4\r\nTransfer-Encoding: chunked\r\nConnection: keep-alive\r\n\r\n'
+        else:
+            Log.Info('TSStreamServer: using constant stream mode')
+            self.stream_request = 'HTTP\\1.1 200 OK\r\nContent-Type: video/mp4\r\nContent-Transfer-Encoding: binary\r\nConnection: keep-alive\r\n\r\n'
+
+        
     def ts_producer(self):
         Log.Info('TSStreamServer[producer]: initalizing..')
         # validate the playlist
@@ -86,6 +95,7 @@ class TSStreamServer(object):
         self.consumer_ready.wait(30)
         if not self.consumer_ready.isSet():
             Log.Error('TSStreamServer[producer]: consumer timed out - terminating')
+            self.producer_ready.clear()
             return
         
         # producer loop
@@ -160,9 +170,24 @@ class TSStreamServer(object):
             Log.Info('TSStreamServer[producer]: waiting for consumer to join in.')
             self.ts_queue.join()
         
+        self.producer_ready.clear()
         Log.Info('TSStreamServer[producer]: exiting.')
         
     def ts_consumer(self, client_conn):
+        def chunk(data):
+            if self.use_chunked:
+                if data:
+                    res = '%x\r\n' % len(data)
+                    res += data
+                    res += '\r\n'
+                else:
+                    res = '0\r\n\r\n'
+                return res
+            else:
+                if data:
+                    return data
+                return ''
+        
         Log.Info('TSStreamServer[consumer]: initalizing..')
         try:
             request = client_conn.recv(4096)
@@ -175,10 +200,15 @@ class TSStreamServer(object):
             if not self.producer_ready.isSet():
                 Log.Error('TSStreamServer[consumer]: producer timet out - terminating.')
                 self.consumer_ready.clear()
+                try:
+                    client_conn.sendall(self.stream_request + chunk(None))
+                    client_conn.close()
+                except socket.error:
+                    pass
                 return
             data = self.ts_queue.get()
             Log.Info('TSStreamServer[consumer]: got first sequence, sending response.')
-            client_conn.sendall(self.stream_request + data)
+            client_conn.sendall(self.stream_request + chunk(data))
             Log.Info('TSStreamServer[consumer]: adjusting socket timeout to 1 (was: %s)', client_conn.gettimeout())
             client_conn.settimeout(1.0)
         except socket.error, se:
@@ -190,17 +220,24 @@ class TSStreamServer(object):
             running = True
             while running:
                 try:
-                    data = self.ts_queue.get()
-                    self.ts_queue.task_done()
-                    client_conn.sendall(data)
-                except queue.Empty:
-                    Log.Error('TSStreamServer[consumer]: item queue empty - terminating.')
-                    self.consumer_ready.clear()
-                    running = False
-                    break
+                    try:
+                        data = self.ts_queue.get()
+                        self.ts_queue.task_done()
+                        client_conn.sendall(chunk(data))
+                    except queue.Empty:
+                        Log.Error('TSStreamServer[consumer]: item queue empty - terminating.')
+                        self.consumer_ready.clear()
+                        client_conn.sendall(chunk(None))
+                        client_conn.close()
+                        running = False
+                        break
                 except socket.error,se:
                     Log.Error('TSStreamServer[consumer]: socket error: %s', se)
                     self.consumer_ready.clear()
+                    try:
+                        client_conn.close()
+                    except socket.error:
+                        pass
                     running = False
                     break
             
@@ -208,28 +245,34 @@ class TSStreamServer(object):
                     # FIXME - cleanup ts_queue
                     Log.Info('TSSTreamServer[consumer]: producer terminated - joining')
                     self.consumer_ready.clear()
+                    try:
+                        client_conn.sendall(chunk(None))
+                        client_conn.close()
+                    except socket.error,se:
+                        pass
                     running = False
                     break
         except Exception, e:
             Log.Error('TSStreamServer[consumer]: unhandled exception %s', e)
             # FIXME - cleanup ts_queue
-            self.consumer_ready.clear()
         
+        self.consumer_ready.clear()
         Log.Info('TSStreamServer[consumer]: exiting.')
-    
     
     def kickstart(self):
         Log.Info('TSStreamServer: preflight..')
+        
         if not self.m3u_parser.load():
             Log.Error('TSStreamServer: setup error, m3u not loaded.')
             return False
-            
+
         self.producer_ready.clear()
         Thread.Create(self.ts_producer)
         self.producer_ready.wait(60)
-        
+    
         if not self.producer_ready.isSet():
             Log.Error('TSStreamServer: setup error, producer timed out.')
             return False
+        
         Log.Info('TSStreamServer: server is ready')
         return True

@@ -79,6 +79,14 @@ class EyeTVLive(object):
         
         self.validate_prefs(False)
         
+        try:
+            ObjectContainer(no_cache=True)
+            self.old_style_menu=False
+            Log.Info("Using new-style menus")
+        except Framework.FrameworkException:
+            self.old_style_menu=True
+            Log.Info("Using old-style menus")
+        
     def validate_prefs(self, force_valid=True):
         """
         Validate the user settings returning an error message if requested.
@@ -346,71 +354,73 @@ class EyeTVLive(object):
         """
         EyeTV live main menu
         """
-       # Use old-style classes until ObjectContainer acquires no_cache..
-        d = MediaContainer(title1='EyeTV', no_cache=True)
-        status = self.run_request(URL_STATUS)
-        if self.local_connect and (not status or not status['isUp']):
-            try:
-                Helper.Run('SpawnEyeTV')
-            except Exception,e:
-                Log.Info('SpawnEyeTV failed: %s', e)
+        if self.old_style_menu:
+           # Use old-style classes until ObjectContainer acquires no_cache..
+            d = MediaContainer(title1='EyeTV', no_cache=True)
             status = self.run_request(URL_STATUS)
+            if self.local_connect and (not status or not status['isUp']):
+                try:
+                    Helper.Run('SpawnEyeTV')
+                except Exception,e:
+                    Log.Info('SpawnEyeTV failed: %s', e)
+                status = self.run_request(URL_STATUS)
         
-        if not status:
-            d.title2= L('offline')
-            d.header = L('Internal error')
-            d.message = L('Could not connect to EyeTV!')
-        elif not status['isUp']:
-            d.title2= L('offline')
-            d.header = L('Internal error')
-            d.message = L('EyeTV is runnig but streaming is disabled.')
-        else:
-            d.title2='%s' % Prefs[PREFS_HOST]
-            d.Append(DirectoryItem(
-                key = Callback(self.gui_channel_list, mode='channel'),
-                title = L('Channels')
-            ))
-            if not self.lofi_version:
+            if not status:
+                d.title2= L('offline')
+                d.header = L('Internal error')
+                d.message = L('Could not connect to EyeTV!')
+            elif not status['isUp']:
+                d.title2= L('offline')
+                d.header = L('Internal error')
+                d.message = L('EyeTV is runnig but streaming is disabled.')
+            else:
+                d.title2='%s' % Prefs[PREFS_HOST]
                 d.Append(DirectoryItem(
-                    key = Callback(self.gui_channel_list, mode='epg'),
-                    title = L('EPG')
+                    key = Callback(self.gui_channel_list, mode='channel'),
+                    title = L('Channels')
                 ))
-        d.Append(DirectoryItem(
-            key = Callback(self.gui_setup_menu),
-            title = L('Setup')
-        ))
-
-#        d = ObjectContainer(title1="EyeTV", view_group='Category')
-#        status = self.run_request(URL_STATUS)
-#        if self.local_connect and (not status or not status['isUp']):
-#            try:
-#                Helper.Run('SpawnEyeTV')
-#            except Exception,e:
-#                Log.Info('SpawnEyeTV failed: %s', e)
-#            status = self.run_request(URL_STATUS)
-#        
-#        if not status:
-#            d.title2='offline'
-##            d.add(MessageContainer('Internal error', 'Could not connect to EyeTV!'))
-#        elif not status['isUp']:
-#            d.title2='offline'
-##            d.add(MessageContainer('Internal error', 'EyeTV is running but streaming is disabled.'))
-#        else:
-#            d.title2='%s' % Prefs[PREFS_HOST]
-##            d.add(MessageContainer('Success', 'We\'re live!'))
-#            d.add(DirectoryObject(
-#                key = Callback(self.gui_channel_list, mode='channel'),
-#                title ='Channels'
-#            ))
-#            if not self.lofi_version:
-#                d.add(DirectoryObject(
-#                    key = Callback(self.gui_channel_list, mode='epg'),
-#                    title = 'EPG'
-#                ))
-#        d.add(DirectoryObject(
-#            key = Callback(self.gui_setup_menu),
-#            title = 'Setup'
-#        ))
+                if not self.lofi_version:
+                    d.Append(DirectoryItem(
+                        key = Callback(self.gui_channel_list, mode='epg'),
+                        title = L('EPG')
+                    ))
+            d.Append(DirectoryItem(
+                key = Callback(self.gui_setup_menu),
+                title = L('Setup')
+            ))
+        else:
+            d = ObjectContainer(title1="EyeTV", view_group='Category', no_cache=True)
+            status = self.run_request(URL_STATUS)
+            if self.local_connect and (not status or not status['isUp']):
+                try:
+                    Helper.Run('SpawnEyeTV')
+                except Exception,e:
+                    Log.Info('SpawnEyeTV failed: %s', e)
+                status = self.run_request(URL_STATUS)
+        
+            if not status:
+                d.title2= L('offline')
+                d.header = L('Internal error')
+                d.message = L('Could not connect to EyeTV!')
+            elif not status['isUp']:
+                d.title2= L('offline')
+                d.header = L('Internal error')
+                d.message = L('EyeTV is runnig but streaming is disabled.')
+            else:
+                d.title2='%s' % Prefs[PREFS_HOST]
+                d.add(DirectoryObject(
+                    key = Callback(self.gui_channel_list, mode='channel'),
+                    title = L('Channels')
+                ))
+                if not self.lofi_version:
+                    d.add(DirectoryObject(
+                        key = Callback(self.gui_channel_list, mode='epg'),
+                        title = L('EPG')
+                    ))
+            d.add(DirectoryObject(
+                key = Callback(self.gui_setup_menu),
+                title = L('Setup')
+            ))
         return d
     
     def gui_channel_list(self, mode):
@@ -452,15 +462,16 @@ class EyeTVLive(object):
                     )
                 duration = (long(epg[0]['STOPTIME']) - long(epg[0]['STARTTIME'])) * 1000
             else:
-                tagline = ''
-                summary = ''
+                tagline = '-'
+                summary = '-'
                 duration = 1
             
             if mode == 'channel':
                 d.add(VideoClipObject(
                       key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
                       title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
-                      summary = summary
+                      summary = summary,
+                      rating_key = info['serviceID']
 #                      ,items = [
 #                        MediaObject(
 #                          parts = [

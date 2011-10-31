@@ -23,7 +23,7 @@ def Start():
     global eyetv_live_service
     eyetv_live_service = EyeTVLive()
     
-    Plugin.AddPrefixHandler('/video/eyetv-live', eyetv_live_service.gui_main_menu, 'EyeTV live')
+    Plugin.AddPrefixHandler('/video/eyetv-live', eyetv_live_service.gui_main_menu, 'EyeTVLive', 'icon-default.png')
     Plugin.AddViewGroup('Category', viewMode='List', mediaType='items')
     Plugin.AddViewGroup('Details', viewMode='InfoList', mediaType='items')
     

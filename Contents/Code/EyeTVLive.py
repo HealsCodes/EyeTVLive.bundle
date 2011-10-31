@@ -34,11 +34,13 @@ PREFS_TOKEN        = 'eyetv_live_token'
 PREFS_TOKEN_TYPE   = 'eyetv_live_token_type'
 PREFS_SCANIF       = 'eyetv_live_scanif'
 PREFS_USE_CHUNKED  = 'eyetv_live_chunked'
+PREFS_LAIKA        = 'eyetv_live_laika'  
 
 BASE_URL           = 'http://%(eyetv_live_host)s:%(eyetv_live_port)s'
 URL_STATUS         = BASE_URL + '/live/status/0/_%(eyetv_live_devid)s_MAINMENU'
 URL_SEED           = BASE_URL + '/live/seed/0'
 URL_STREAM         = BASE_URL + '/live/stream'
+URL_STREAM_DIRECT  = BASE_URL + '/live/stream/%(stream_url)s'
 URL_TIMEZONE       = BASE_URL + '/live/timeZone/0'
 URL_FAVORITES      = BASE_URL + '/live/favorites/0/_%(eyetv_live_devid)s_FAVORITES'
 URL_CHANNEL_LIST   = BASE_URL + '/live/channels/%(epg_detail)d/0/%(item_base)d/%(item_count)d/_%(eyetv_live_devid)s_CHANNELS'
@@ -57,7 +59,8 @@ class EyeTVLive(object):
         Log('Creating EyTVLive service..')
         
         Route.Connect('/video/eyetv-live/list/{mode}', self.gui_channel_list)
-        Route.Connect('/video/eyetv-live/tune/{service_id}/{kbps}', self.tune_to)        
+        Route.Connect('/video/eyetv-live/tune/{service_id}-{kbps}', self.tune_to)
+        Route.Connect('/video/eyetv-live/tune/{file}', self.stream_proxy)
         Route.Connect('/video/eyetv-live/setup', self.gui_setup_menu)
         Route.Connect('/video/eyetv-live/setup/kickstart', self.kickstart)
         Route.Connect('/video/eyetv-live/setup/tokenscan', self.tokenscan)
@@ -76,45 +79,49 @@ class EyeTVLive(object):
         self.lofi_version = False
         self.channel_list = []
         self.epg = EPGParser(self, '/video/eyetv-live', URL_EPG_REQUEST, URL_EPG_SHOW_INFO)        
+        self.stream_base = ''
         
         self.validate_prefs(False)
         
         try:
             ObjectContainer(no_cache=True)
             self.old_style_menu=False
-            Log.Info("Using new-style menus")
+            Log.Info("EyeTVLive: Using new-style menus")
         except Framework.FrameworkException:
             self.old_style_menu=True
-            Log.Info("Using old-style menus")
+            Log.Info("EyeTVLive: Using old-style menus")
         
     def validate_prefs(self, force_valid=True):
         """
         Validate the user settings returning an error message if requested.
         """
+        if Prefs[PREFS_LAIKA] == 'on':
+            Log.Info('EyeTVLive: Laika experimental features enabled')
+        
         try:
             if Prefs[PREFS_CLIENT] == 'IPAD':
                 self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
                 self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
-                Log.Info('EyeTV: validate_prefs: iPad client settings')
+                Log.Info('EyeTVLive: validate_prefs: iPad client settings')
             elif Prefs[PREFS_CLIENT] == 'IPHONE':
                 self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/485.13.9 Darwin/11.0.0'
                 self.headers['X-App-UUID'] = '9735687db77159a0396d68a925433ec8'
-                Log.Info('EyeTV: validate_prefs: iPhone client settings')
+                Log.Info('EyeTVLive: validate_prefs: iPhone client settings')
             else:
                 self.headers['X-Safari']   = 'yes'
                 #self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
                 #self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
-                Log.Info('EyeTV: validate_prefs: Safari client settings')
+                Log.Info('EyeTVLive: validate_prefs: Safari client settings')
             
             # first error will bail out
             if not Prefs[PREFS_HOST] or not Prefs[PREFS_PORT]:
-                Log.Info('EyeTV: validate_prefs: host/port invalid')
+                Log.Info('EyeTVLive: validate_prefs: host/port invalid')
                 if force_valid:
                     raise RuntimeError(L('Invalid host/port configuration.'))
             try:
                 v = long(Prefs[PREFS_PORT])
             except ValueError:
-                Log.Info('EyeTV: validate_prefs: port is not numeric')
+                Log.Info('EyeTVLive: validate_prefs: port is not numeric')
                 if force_valid:
                     raise RuntimeError(L('Invalid port - value must be numeric.'))
                     
@@ -145,15 +152,15 @@ class EyeTVLive(object):
                     except ImportError:
                         pass
                 
-                Log.Info("EyeTV: validate_prefs: local_connect=%d", self.local_connect)
+                Log.Info("EyeTVLive: validate_prefs: local_connect=%d", self.local_connect)
             except socket.error, e:
-                Log.Error("EyeTV: validate_prefs: could not determine local_connect: %s", e)
+                Log.Error("EyeTVLive: validate_prefs: could not determine local_connect: %s", e)
                 self.local_connect = False
             
             # check this last as it's probably going to raise an "error"
             if Prefs[PREFS_TOKEN_TYPE] == 'prefs':
                 if not Prefs[PREFS_TOKEN] or not re.match('^[0-9a-fA-F]{32}', Prefs[PREFS_TOKEN]):
-                    Log.Info('EyeTV: validate_prefs: TokenType "prefs" but no token set.')
+                    Log.Info('EyeTVLive: validate_prefs: TokenType "prefs" but no token set.')
                     self.lofi_version = True
                     self.epg.reset()
                     self.channel_list = []
@@ -164,7 +171,7 @@ class EyeTVLive(object):
                     self.headers['X-EyeConnect-Token'] = Prefs[PREFS_TOKEN]
             else:
                 if not Dict[PREFS_TOKEN]:
-                    Log.Info('EyeTV: validate_prefs: TokenType "scanning" but no token set.')
+                    Log.Info('EyeTVLive: validate_prefs: TokenType "scanning" but no token set.')
                     self.lofi_version = True
                     self.epg.reset()
                     self.channel_list = []
@@ -173,7 +180,7 @@ class EyeTVLive(object):
                 else:
                     self.lofi_version = False
                     self.headers['X-EyeConnect-Token'] = Dict[PREFS_TOKEN]
-            Log('EyeTV: validate_prefs: valid, lofi_version=%d', self.lofi_version)
+            Log('EyeTVLive: validate_prefs: valid, lofi_version=%d', self.lofi_version)
         except RuntimeError, e:
             d = MessageContainer(L('Configuration Error'), str(e))
             return d
@@ -231,7 +238,7 @@ class EyeTVLive(object):
                     need_refresh = True
                     break
             if not need_refresh:
-                Log('Using cached channel list')
+                Log('EyeTVLive. Using cached channel list')
                 return self.channel_list;
         
         Log('EyeTVLive: Requesting channel list (detail=%d)', epg_detail)
@@ -294,25 +301,46 @@ class EyeTVLive(object):
                     d = MessageContainer(L('Internal error'), L('EyeTV failed to switch channels.'))
                     return d
                 if res['isReadyToStream']:
-                    Log.Debug('EyeTVLive: stream is ready, manifesting server..')
-                    #server = TSStreamServer(Prefs[PREFS_USE_CHUNKED],
-                    server = TSStreamServer(False,
+                    if Prefs[PREFS_LAIKA] == 'on':
+                        live_url = URL_STREAM_DIRECT % {
+                                                'service_id' : service_id,
+                                                'eyetv_live_host' : Prefs[PREFS_HOST], 
+                                                'eyetv_live_port' : Prefs[PREFS_PORT],
+                                                'stream_url' : stream_url
+                                   }
+                        Log.Debug('EyeTVLive: stream is ready, redirecting..: %s' % live_url)
+
+                        # FIXME: Laika fails handling the relative http-livestream,
+                        # FIXME: for now we support proxying these requests via
+                        # FIXME: /video/eyetv-live/tune/{xxx} - this needs fixing!!
+                        Response.Headers['Cache-Control'] = 'no-cache'
+                        self.stream_base = '/'.join(stream_url.split('/')[:-1])
+                        
+                        return Redirect(live_url)
+                    else:
+                        server = TSStreamServer(False,
                                             URL_STREAM % { 
                                                 'service_id' : service_id,
                                                 'eyetv_live_host' : Prefs[PREFS_HOST],
                                                 'eyetv_live_port' : Prefs[PREFS_PORT]
                                             }, stream_url)
-                    if server.kickstart():
-                        Response.Headers['Cache-Control'] = 'no-cache'
-                        return Redirect('http://127.0.0.1:2171/stream.mpeg')
-                    else:
-                        d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
-                        return d
+                        if server.kickstart():
+                            Response.Headers['Cache-Control'] = 'no-cache'
+                            return Redirect('http://127.0.0.1:2171/stream.mpeg')
+                        else:
+                            d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
+                            return d
                 else:
                     Log.Debug('EyeTVLive: buffering stream (%f/%f)..',
                               res['doneEncoding'], res['minEncodingToStartStreaming'])
                     Thread.Sleep(1)
     
+    def stream_proxy(self, file):
+        real_url = URL_STREAM % { 'eyetv_live_host' : Prefs[PREFS_HOST], 'eyetv_live_port' : Prefs[PREFS_PORT]}
+        real_url += '/%s/%s' % (self.stream_base, file)
+        Log.Debug('EyeTVLive: stream-proxy => %s' % real_url)
+        return Redirect(real_url)
+        
     def kickstart(self):
         d = MessageContainer('Kickstart','-')
         try:
@@ -352,11 +380,11 @@ class EyeTVLive(object):
     # -- gui code
     def gui_main_menu(self):
         """
-        EyeTV live main menu
+        EyeTVLive main menu
         """
         if self.old_style_menu:
-           # Use old-style classes until ObjectContainer acquires no_cache..
-            d = MediaContainer(title1='EyeTV', no_cache=True)
+           # Use old-style classes for Plex < 0.9.3.4...
+            d = MediaContainer(title1='EyeTVLive', no_cache=True)
             status = self.run_request(URL_STATUS)
             if self.local_connect and (not status or not status['isUp']):
                 try:
@@ -389,7 +417,7 @@ class EyeTVLive(object):
                 title = L('Setup')
             ))
         else:
-            d = ObjectContainer(title1="EyeTV", view_group='Category', no_cache=True)
+            d = ObjectContainer(title1="EyeTVLive", view_group='Category', no_cache=True)
             status = self.run_request(URL_STATUS)
             if self.local_connect and (not status or not status['isUp']):
                 try:
@@ -462,29 +490,36 @@ class EyeTVLive(object):
                     )
                 duration = (long(epg[0]['STOPTIME']) - long(epg[0]['STARTTIME'])) * 1000
             else:
-                tagline = '-'
-                summary = '-'
+                tagline = ''
+                summary = L('<No details available>')
                 duration = 1
             
             if mode == 'channel':
-                d.add(VideoClipObject(
-                      key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
-                      title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
-                      summary = summary,
-                      rating_key = info['serviceID']
-#                      ,items = [
-#                        MediaObject(
-#                          parts = [
-#                            PartObject(key=k)
-#                          ],
-#                          protocols = [Protocol.HTTPLiveStreaming],
-#                          protocols = [Protocol.HTTPMP4Video, Protocol.HTTPVideo, Protocol.HTTPMP4Streaming],
-#                          platforms = [ClientPlatform.MacOSX],
-#                          video_codec = VideoCodec.H264,
-#                          audio_codec = AudioCodec.AAC
-#                        )
-#                      ]
-                ))
+#                if Client.Platform == ClientPlatform.iOS:
+                    d.add(VideoClipObject(
+                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
+                          title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
+                          summary = summary,
+                          rating_key = info['serviceID']
+                    ))
+#                else:
+#                    d.add(VideoClipObject(
+#                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
+#                          title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
+#                          summary = summary,
+#                          rating_key = info['serviceID']
+#                          ,items = [
+#                            MediaObject(
+#                              parts = [
+#                                PartObject(key=Callback(self.tune_to, service_id=info['serviceID'], kbps=20000))
+#                              ],
+#                              protocols = [Protocol.HTTPMP4Video, Protocol.HTTPVideo, Protocol.HTTPMP4Streaming],
+#                              platforms = [ClientPlatform.iOS],
+#                              video_codec = VideoCodec.H264,
+#                              audio_codec = AudioCodec.AAC
+#                            )
+#                          ]
+#                    ))
             elif mode == 'epg':
                 d.add(DirectoryObject(
                     key = self.epg.callback_for_channel(info['serviceID']),
@@ -495,12 +530,27 @@ class EyeTVLive(object):
                 return MessageContainer(L('Error'), L('Internal error..'))
         return d
     
-    def gui_setup_menu(self):
+    def gui_setup_menu(self, show_about=False):
         """
         Setup sub-menu, a place for tools and configuration..
         (and a clever hack to force the main menu to reload!)
         """
-        d = ObjectContainer(title1=L('Settings'))
+        d = ObjectContainer(title1=L('Settings'), view_group='Details')
+        if show_about:
+            d.header = 'EyeTVLive for Plex'
+            d.message = """
+(c) 2010 Rene Koecher, some rights reserved
+
+           Graphics Design
+        (c) 2011 Peter Flaherty
+--------------------------------------------
+EyeTV live core: %s
+      EPGParser: %s
+     M3U8Parser: %s
+ TSStreamServer: %s
+--------------------------------------------
+""" % (EyeTVLive.VERSION, EPGParser.VERSION, M3U8Parser.VERSION, TSStreamServer.VERSION)
+
         if 'last_scan_on' in Dict:
             scan_info = Dict['last_scan_on']
         else:
@@ -540,18 +590,18 @@ Try to start the local EyeTV in server mode.
         d.add(PrefsObject(title=L('Preferences')))
         d.add(DirectoryObject(key = Callback(self.gui_setup_menu), title=''))
         d.add(DirectoryObject(
-            key = Callback(self.gui_setup_menu),
+            key = Callback(self.gui_setup_menu, show_about=True),
             title='About',
-            summary = F("""
-         EyeTV live for Plex
-(c) 2010 Rene Koecher, some rights reserved
+            summary = """         EyeTVLive for Plex
+(c) 2010 Rene Koecher, some rights reserved.
+ Graphics Design by Peter Flaherty (c) 2011
 --------------------------------------------
 EyeTV live core: %s
       EPGParser: %s
      M3U8Parser: %s
  TSStreamServer: %s
 --------------------------------------------
-""", EyeTVLive.VERSION, EPGParser.VERSION, M3U8Parser.VERSION, TSStreamServer.VERSION)
+""" % (EyeTVLive.VERSION, EPGParser.VERSION, M3U8Parser.VERSION, TSStreamServer.VERSION)
         ))
         return d
         

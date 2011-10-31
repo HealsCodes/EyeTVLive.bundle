@@ -20,6 +20,9 @@
 	-->
 	<key>PlexClientPlatforms</key>
 	<string>MacOSX</string>
+	<!--
+	<string>MacOSX,iOS</string>
+	-->
 	<key>PlexFrameworkVersion</key>
 	<string>2</string>
 	<!-- 

@@ -43,5 +43,12 @@
     "type"    : "enum",
     "values"  : ["lo0", "en0", "en1", "en2"],
     "default" : "en1"
+  },
+  {
+    "id"      : "eyetv_live_laika",
+    "label"   : "Laika features",
+    "type"    : "enum",
+    "values"  : ["on", "off"],
+    "default" : "off"
   }
 ]

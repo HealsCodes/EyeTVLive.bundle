@@ -47,8 +47,7 @@
   {
     "id"      : "eyetv_live_laika",
     "label"   : "Laika features",
-    "type"    : "enum",
-    "values"  : ["on", "off"],
-    "default" : "off"
+    "type"    : "bool",
+    "default" : "false"
   }
 ]

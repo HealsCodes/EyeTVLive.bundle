@@ -47,8 +47,9 @@ URL_CHANNEL_LIST   = BASE_URL + '/live/channels/%(epg_detail)d/0/%(item_base)d/%
 URL_TUNE_TO_SAFARI = BASE_URL + '/live/tuneto/1/%(kbps)d/%(service_id)s/_SAFARI_PLAYER'
 URL_TUNE_TO_IDEV   = BASE_URL + '/live/tuneto/6/%(kbps)d/0/1/6/%(service_id)s/_%(eyetv_live_devid)s_PLAYER'
 URL_READY          = BASE_URL + '/live/ready/0/_%(eyetv_live_devid)s_PLAYER'
-#URL_RECORD_SET     = BASE_URL + '/live/schedule/1/%(show_uuid)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
-#URL_RECORD_DEL     = BASE_URL + '/live/deleteschedule/0/%(ts_start)s/_%(eyetv_live_devid)s_DETAILS'
+URL_RECORD_GET     = BASE_URL + '/live/showstatus/0/%(show_uuid)s/%(show_starttime)s/%(show_stoptime)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
+URL_RECORD_SET     = BASE_URL + '/live/schedule/1/%(show_uuid)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
+URL_RECORD_DEL     = BASE_URL + '/live/deleteschedule/0/%(show_reckey)s/_%(eyetv_live_devid)s_DETAILS'
 URL_EPG_REQUEST    = BASE_URL + '/epg/request/0/%(ts_start)d/%(ts_end)d/%(service_id)s/_%(eyetv_live_devid)s_EPG'
 URL_EPG_SHOW_INFO  = BASE_URL + '/epg/info/1/%(show_uuid)s/_%(eyetv_live_devid)s_EPG'
 
@@ -78,11 +79,15 @@ class EyeTVLive(object):
         self.local_connect = False
         self.lofi_version = False
         self.channel_list = []
-        self.epg = EPGParser(self, '/video/eyetv-live', URL_EPG_REQUEST, URL_EPG_SHOW_INFO)        
+        self.epg = EPGParser(self, '/video/eyetv-live', 
+                                    URL_EPG_REQUEST,
+                                    URL_EPG_SHOW_INFO,
+                                    URL_RECORD_GET,
+                                    URL_RECORD_SET,
+                                    URL_RECORD_DEL)
         self.stream_base = ''
         
         self.validate_prefs(False)
-        
         try:
             ObjectContainer(no_cache=True)
             self.old_style_menu=False
@@ -95,7 +100,7 @@ class EyeTVLive(object):
         """
         Validate the user settings returning an error message if requested.
         """
-        if Prefs[PREFS_LAIKA] == 'on':
+        if Prefs[PREFS_LAIKA]:
             Log.Info('EyeTVLive: Laika experimental features enabled')
         
         try:
@@ -301,7 +306,7 @@ class EyeTVLive(object):
                     d = MessageContainer(L('Internal error'), L('EyeTV failed to switch channels.'))
                     return d
                 if res['isReadyToStream']:
-                    if Prefs[PREFS_LAIKA] == 'on':
+                    if Prefs[PREFS_LAIKA]:
                         live_url = URL_STREAM_DIRECT % {
                                                 'service_id' : service_id,
                                                 'eyetv_live_host' : Prefs[PREFS_HOST], 

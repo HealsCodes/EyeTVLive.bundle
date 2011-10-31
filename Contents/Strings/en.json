@@ -12,6 +12,8 @@
     "Watch %s" : "Watch %s",
     "Record" : "Record",
     "Sorry, recording a show is not quiet implemented in this version." : "Sorry, recording a show is not quiet implemented in this version.",
+    "Schedule this show for recording.":"Schedule this show for recording.",
+    "Cancel the scheduled recording for this show.":"Cancel the scheduled recording for this show.",
         
     "Playing:" : "Playing:",
     "Up next:" : "Up next:",
@@ -24,6 +26,11 @@
 
     "Error" : "Error",
     "Unable to fetch EPG data." : "Unable to fetch EPG data.",
+    "OK" : "OK",
+    "Unable to cancel the recording!" : "Unable to cancel the recording!",
+    "Recording canceled." : "Recording canceled.",
+    "Recording failed!" : "Recording failed!",
+    "Scheduled for record." : "Scheduled for record.",
 
 
     "Configuration Error" : "Configuration Error",

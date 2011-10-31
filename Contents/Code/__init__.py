@@ -30,6 +30,10 @@ def Start():
     HTTP.Headers['Cache-Control'] = 'no-cache'
     ObjectContainer.title1 = 'EyeTV live'
     ObjectContainer.content = ContainerContent.GenericVideos
+    try:
+        ObjectContainer.no_cache = True
+    except Framework.FrameworkException:
+        pass
 
 def ValidatePrefs():
     global eyetv_live_service

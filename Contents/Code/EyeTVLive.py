@@ -210,7 +210,13 @@ class EyeTVLive(object):
         
         try:
 #            HTTP.ClearCache()
-            res = JSON.ObjectFromURL(url % args, headers=self.headers)
+            if 'plain_http' in kwargs and kwargs['plain_http']:
+                try:
+                    res = HTTP.Request(url % args, headers=self.headers)
+                except:
+                    res = None
+            else:
+                res = JSON.ObjectFromURL(url % args, headers=self.headers)
             if not res:
                 return default
             return res
@@ -540,21 +546,15 @@ class EyeTVLive(object):
         Setup sub-menu, a place for tools and configuration..
         (and a clever hack to force the main menu to reload!)
         """
-        d = ObjectContainer(title1=L('Settings'), view_group='Details')
         if show_about:
-            d.header = 'EyeTVLive for Plex'
-            d.message = """
-(c) 2010 Rene Koecher, some rights reserved
-
-           Graphics Design
-        (c) 2011 Peter Flaherty
---------------------------------------------
-EyeTV live core: %s
-      EPGParser: %s
-     M3U8Parser: %s
- TSStreamServer: %s
---------------------------------------------
-""" % (EyeTVLive.VERSION, EPGParser.VERSION, M3U8Parser.VERSION, TSStreamServer.VERSION)
+            d = MessageContainer('EyeTVLive for Plex',
+"""(c) 2011, some rights reserved
+  Programming by Rene Koecher
+Graphics design by Peter Flaherty
+""")
+            return d
+        
+        d = ObjectContainer(title1=L('Settings'), view_group='Details')
 
         if 'last_scan_on' in Dict:
             scan_info = Dict['last_scan_on']
@@ -598,7 +598,7 @@ Try to start the local EyeTV in server mode.
             key = Callback(self.gui_setup_menu, show_about=True),
             title='About',
             summary = """         EyeTVLive for Plex
-(c) 2010 Rene Koecher, some rights reserved.
+     Programming by Rene Koecher (c) 2011
  Graphics Design by Peter Flaherty (c) 2011
 --------------------------------------------
 EyeTV live core: %s

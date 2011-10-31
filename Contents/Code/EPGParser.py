@@ -24,32 +24,35 @@ import time
 
 URL_EPG_REQUEST     = ''
 URL_EPG_SHOW_INFO   = ''
-#URL_EPG_RECORD_INFO = ''
-#URL_RECORD_SET      = ''
-#URL_RECORD_DEL      = ''
+URL_RECORD_GET     = ''
+URL_RECORD_SET      = ''
+URL_RECORD_DEL      = ''
 
 class EPGParser(object):
-    VERSION = '0.2'
+    VERSION = '0.3'
     
-    def __init__(self, request_delegate, base_url, url_channel, url_show):#, url_rec, url_del, url_rec_info):
+    def __init__(self, request_delegate, base_url, url_channel, url_show, url_rec_get, url_rec_set, url_rec_del):
         global URL_EPG_REQUEST
         URL_EPG_REQUEST = url_channel
         global URL_EPG_SHOW_INFO
         URL_EPG_SHOW_INFO = url_show
-#        global URL_EPG_RECORD_INFO
-#        URL_EPG_RECORD_INFO = url_rec_info
-#        global URL_RECORD_SET
-#        URL_RECORD_SET = url_rec
-#        global URL_RECORD_DEL
-#        URL_RECORD_DEL = url_del
+        global URL_RECORD_GET
+        URL_RECORD_GET = url_rec_get
+        global URL_RECORD_SET
+        URL_RECORD_SET = url_rec_set
+        global URL_RECORD_DEL
+        URL_RECORD_DEL = url_rec_del
         Route.Connect(base_url + '/epg/show/{service_id}', self.gui_epg_for_channel)
         Route.Connect(base_url + '/epg/show/{service_id}/{uniqueid}', self.gui_epg_for_show)
+        Route.Connect(base_url + '/epg/record/del/{service_id}/{uniqueid}/{rec_id}', self.cancel_recording)
+        Route.Connect(base_url + '/epg/record/set/{service_id}/{uniqueid}/{rec_id}', self.schedule_recording)
         
         self.delegate = request_delegate
         self.epg_start = 0
         self.epg_end = 0
         self.epg_channel_data = {}
         self.epg_detail_data = {}
+        self.epg_recordings_data = {}
         self.epg_lock = Thread.Lock()
     
     def run_request(self, url, **kwargs):
@@ -61,6 +64,7 @@ class EPGParser(object):
         """
         self.epg_channel_data = {}
         self.epg_detail_data = {}
+        self.epg_recordings_data = {}
     
     def compact_cache(self):
         """
@@ -77,13 +81,15 @@ class EPGParser(object):
                 expired.append(uuid)
         for uuid in expired:
             self.epg_detail_data.pop(uuid)
+            if uuid in self.epg_recordings_data:
+                self.epg_recordings_data.pop(uuid)
         # -- end critical section --        
         self.epg_lock.release()
         if expired:
             Log.Info('EPGParser: compacted cache by removing %d items', len(expired))
     
     
-    def fetch_channel_data(self, service_id):
+    def fetch_channel_data(self, service_id, skip_cache=False):
         """
         Fetch the cannel data for the next 24 hours for a given service_id.
         Data will be cached on a per channel basis with one hour expiration time.
@@ -92,8 +98,9 @@ class EPGParser(object):
         ts_now = self.ts_unix_to_nsdate(time.time())
         ts_end = ts_now + 86400
         if service_id in self.epg_channel_data and self.epg_start - ts_now < 3600:
-            Log.Debug('EPGParser: using cached channel data (younger than 1 hour)')
-            return True
+            if not skip_cache:
+                Log.Debug('EPGParser: using cached channel data (younger than 1 hour)')
+                return True
         
         # -- critical section --
         if not self.epg_lock.acquire(False):
@@ -119,12 +126,27 @@ class EPGParser(object):
                 return True
         # -- end critical section --
     
-    def fetch_detail_data(self, uniqueid):
+    def fetch_detail_data(self, service_id, uniqueid):
         """
         Fetch detailed show info for a given uniqueid.
         (Will return cached hits where possible)
         """
         if uniqueid in self.epg_detail_data:
+            self.epg_lock.acquire()
+            # -- critical section --
+            epg_data = [self.epg_detail_data[uniqueid]]
+            record_data = self.run_request(URL_RECORD_GET, show_uuid=uniqueid, 
+                                                           show_starttime=epg_data[0]['STARTTIME'],
+                                                           show_stoptime=epg_data[0]['STOPTIME'],
+                                                           service_id=service_id)
+            if not record_data:
+                Log.Error('EPGParser: Request for record_data for uniqueid=%s failed', uniqueid)
+                # FIXME: bail out or keep going? - for now, keep going
+            else:
+                self.epg_recordings_data[uniqueid] = record_data
+
+            self.epg_lock.release()
+            # -- end critical section --
             return self.epg_detail_data[uniqueid]
         self.epg_lock.acquire()
         # -- critical section --
@@ -134,6 +156,16 @@ class EPGParser(object):
             self.epg_lock.release()
             return None
         self.epg_detail_data[uniqueid] = epg_data[0]
+        
+        record_data = self.run_request(URL_RECORD_GET, show_uuid=uniqueid, 
+                                                       show_starttime=epg_data[0]['STARTTIME'],
+                                                       show_stoptime=epg_data[0]['STOPTIME'],
+                                                       service_id=service_id)
+        if not record_data:
+            Log.Error('EPGParser: Request for record_data for uniqueid=%s failed', uniqueid)
+            # FIXME: bail out or keep going? - for now, keep going
+        else:
+            self.epg_recordings_data[uniqueid] = record_data
         self.epg_lock.release()
         # -- end critical section --
         return self.epg_detail_data[uniqueid]
@@ -154,11 +186,11 @@ class EPGParser(object):
         Log.Info('EPGParser: filtered data contains %d out of %d items', len(epg_data), len(data))
         return epg_data
     
-    def format_detail_data(self, show):
+    def format_detail_data(self, service_id, show):
         """
         Return a dict with pre-formated EPG data for a given show.
         """
-        detail = self.fetch_detail_data(show['UNIQUEID'])
+        detail = self.fetch_detail_data(service_id, show['UNIQUEID'])
         if detail:
              duration = time.strftime('%H:%M', time.localtime(-3600 + (detail.get('STOPTIME', 0) - detail.get('STARTTIME', 0)))) 
              summary = '%s\n%s\n%s\n\n%s\n\n%s\n%s\n%s %s' % (
@@ -173,15 +205,48 @@ class EPGParser(object):
             )
         else:
             summary = L('<No details available>')
+        
+        title = show['TITLE']
+        if show['UNIQUEID'] in self.epg_recordings_data:
+            record_id = self.epg_recordings_data[show['UNIQUEID']]['programID']
+            if not record_id == 0:
+                title = '%s [REC]' % (show['TITLE'])
+        else:
+            record_id = 0
+            
         title = '%s-%s %s' % (
             time.strftime('%H:%M', time.localtime(show['STARTTIME'])),
             time.strftime('%H:%M', time.localtime(show['STOPTIME'])),
-            show['TITLE']
+            title
         )
         tagline = show['ABSTRACT']
         summary = summary
         duration = (long(show['STOPTIME']) - long(show['STARTTIME'])) * 1000
-        return { 'title':title, 'tagline':tagline, 'summary':summary, 'duration':duration }
+        
+        return { 'title':title, 'tagline':tagline, 'summary':summary, 'duration':duration, 'rec':record_id }
+    
+    def schedule_recording(self, service_id, uniqueid, rec_id):
+        """
+        Schedule a show for recording
+        """
+        res = self.run_request(URL_RECORD_SET, show_uuid=uniqueid,
+                                               service_id=service_id)
+        if not res:
+            return MessageContainer(L('Error'), L('Unable to cancel the recording!'))
+        self.epg_recordings_data[uniqueid] = res
+        self.fetch_channel_data(service_id, skip_cache=True)
+        return MessageContainer(L('OK'), L('Scheduled for record.'))
+
+    def cancel_recording(self, service_id, uniqueid, rec_id):
+        """
+        Cancel a scheduled recording
+        """
+        res = self.run_request(URL_RECORD_DEL, default=True, show_reckey=rec_id, plain_http=True)
+        if not res:
+            return MessageContainer(L('Error'), L('Recording failed!'))
+        self.epg_recordings_data[uniqueid] = {}
+        self.fetch_channel_data(service_id, skip_cache=True)
+        return MessageContainer(L('OK'), L('Recording canceled.'))
         
     def ts_unix_to_nsdate(self, seconds):
         """
@@ -220,7 +285,7 @@ class EPGParser(object):
             self.compact_cache()
             d = ObjectContainer(title2 = channel_data['channelInfo']['name'], view_group='Category')
             for show in self.filter_data(channel_data['EPGData']):
-                detail = self.format_detail_data(show)
+                detail = self.format_detail_data(service_id, show)
                 s = DirectoryObject(
                     key = Callback(self.gui_epg_for_show, service_id=service_id, uniqueid=show['UNIQUEID']),
                     title = detail['title'],
@@ -243,7 +308,7 @@ class EPGParser(object):
             return MessageContainer(L('Error'), L('Unable to fetch EPG data.'))
         
         show = show_dict[uniqueid]
-        detail = self.format_detail_data(show)
+        detail = self.format_detail_data(service_id, show)
         d = ObjectContainer(title2=L('EPG details'), view_group='Details')
         d.add(DirectoryObject(
                 key = Callback(self.gui_epg_for_show, service_id=service_id, uniqueid=uniqueid),
@@ -254,12 +319,20 @@ class EPGParser(object):
         ))
         d.add(VideoClipObject(
                 key = Callback(self.delegate.tune_to, service_id=service_id, kbps=20000),
+                rating_key = service_id,
                 title = F('Watch %s', channel_data['channelInfo']['name']),
         ))
-        d.add(DirectoryObject(
-                key = Callback(self.gui_epg_for_show, service_id=service_id, uniqueid=uniqueid),
-                title = L('Record'),
-                summary = L('Sorry, recording a show is not quiet implemented in this version.')
-        ))
+        if detail['rec']:
+            d.add(DirectoryObject(
+                    key = Callback(self.cancel_recording, service_id=service_id, uniqueid=uniqueid, rec_id=detail['rec']),
+                    title = L('Cancel Recording'),
+                    summary = L('Cancel the scheduled recording for this show.')
+            ))
+        else:
+            d.add(DirectoryObject(
+                    key = Callback(self.schedule_recording, service_id=service_id, uniqueid=uniqueid, rec_id=detail['rec']),
+                    title = L('Record'),
+                    summary = L('Schedule this show for recording.')
+            ))
         return d
     

@@ -428,7 +428,7 @@ class EyeTVLive(object):
                 title = L('Setup')
             ))
         else:
-            d = ObjectContainer(title1="EyeTVLive", view_group='Category', no_cache=True)
+            d = ObjectContainer(title1="EyeTVLive", view_group='Details', no_cache=True)
             status = self.run_request(URL_STATUS)
             if self.local_connect and (not status or not status['isUp']):
                 try:

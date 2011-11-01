@@ -23,13 +23,21 @@ def Start():
     global eyetv_live_service
     eyetv_live_service = EyeTVLive()
     
-    Plugin.AddPrefixHandler('/video/eyetv-live', eyetv_live_service.gui_main_menu, 'EyeTVLive', 'icon-default.png')
+    Plugin.AddPrefixHandler('/video/eyetv-live', eyetv_live_service.gui_main_menu, 'EyeTVLive', 'icon-default.png', 'background.png')
     Plugin.AddViewGroup('Category', viewMode='List', mediaType='items')
     Plugin.AddViewGroup('Details', viewMode='InfoList', mediaType='items')
     
     HTTP.Headers['Cache-Control'] = 'no-cache'
-    ObjectContainer.title1 = 'EyeTV live'
+    ObjectContainer.title1 = 'EyeTVLive'
     ObjectContainer.content = ContainerContent.GenericVideos
+    ObjectContainer.art = R('background.png')
+    
+    MediaContainer.art = R('background.png')
+    
+    DirectoryObject.thumb = R('icon-default.png')
+    DirectoryObject.art = R('background.png')
+    VideoClipObject.art = R('background.png')
+    
     try:
         ObjectContainer.no_cache = True
     except Framework.FrameworkException:

@@ -104,11 +104,11 @@ class EyeTVLive(object):
             Log.Info('EyeTVLive: Laika experimental features enabled')
         
         try:
-            if Prefs[PREFS_CLIENT] == 'IPAD':
+            if Prefs[PREFS_DEVID] == 'IPAD':
                 self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
                 self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
                 Log.Info('EyeTVLive: validate_prefs: iPad client settings')
-            elif Prefs[PREFS_CLIENT] == 'IPHONE':
+            elif Prefs[PREFS_DEVID] == 'IPHONE':
                 self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/485.13.9 Darwin/11.0.0'
                 self.headers['X-App-UUID'] = '9735687db77159a0396d68a925433ec8'
                 Log.Info('EyeTVLive: validate_prefs: iPhone client settings')
@@ -116,7 +116,7 @@ class EyeTVLive(object):
                 self.headers['X-Safari']   = 'yes'
                 #self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
                 #self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
-                Log.Info('EyeTVLive: validate_prefs: Safari client settings')
+                Log.Info('EyeTVLive: validate_prefs: Safari client settings (PREFS_CLIENT:"%s")' % Prefs[PREFS_CLIENT])
             
             # first error will bail out
             if not Prefs[PREFS_HOST] or not Prefs[PREFS_PORT]:

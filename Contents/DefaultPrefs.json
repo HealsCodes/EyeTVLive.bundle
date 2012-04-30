@@ -12,17 +12,18 @@
     "default" : "2170"
   },
   {
-    "id"      : "eyetv_live_client",
-    "label"   : "Client Name",
-    "type"    : "text",
-    "default" : "PMS"
-  },
-  {
     "id"      : "eyetv_live_devid",
     "label"   : "Client Type",
     "type"    : "enum",
     "values"  : ["IPHONE", "IPAD", "SAFARI"],
     "default" : "IPAD"
+  },
+  {
+    "id"      : "eyetv_live_kbps",
+    "label"   : "Stream Quality",
+    "type"    : "enum",
+    "values"  : ["320", "800", "1200", "2000", "2540", "4540"],
+    "default" : "2000"
   },
   {
     "id"      : "eyetv_live_token",
@@ -43,6 +44,12 @@
     "type"    : "enum",
     "values"  : ["lo0", "en0", "en1", "en2"],
     "default" : "en1"
+  },
+  {
+    "id"      : "eyetv_live_client",
+    "label"   : "Client Name",
+    "type"    : "text",
+    "default" : "PMS"
   },
   {
     "id"      : "eyetv_live_laika",

@@ -35,6 +35,7 @@ PREFS_TOKEN_TYPE   = 'eyetv_live_token_type'
 PREFS_SCANIF       = 'eyetv_live_scanif'
 PREFS_USE_CHUNKED  = 'eyetv_live_chunked'
 PREFS_LAIKA        = 'eyetv_live_laika'  
+PREFS_KBPS         = 'eyetv_live_kbps'
 
 BASE_URL           = 'http://%(eyetv_live_host)s:%(eyetv_live_port)s'
 URL_STATUS         = BASE_URL + '/live/status/0/_%(eyetv_live_devid)s_MAINMENU'
@@ -61,7 +62,6 @@ class EyeTVLive(object):
         
         Route.Connect('/video/eyetv-live/list/{mode}', self.gui_channel_list)
         Route.Connect('/video/eyetv-live/tune/{service_id}-{kbps}', self.tune_to)
-        Route.Connect('/video/eyetv-live/tune/{file}', self.stream_proxy)
         Route.Connect('/video/eyetv-live/setup', self.gui_setup_menu)
         Route.Connect('/video/eyetv-live/setup/kickstart', self.kickstart)
         Route.Connect('/video/eyetv-live/setup/tokenscan', self.tokenscan)
@@ -100,6 +100,9 @@ class EyeTVLive(object):
         """
         Validate the user settings returning an error message if requested.
         """
+        # invalidate the channel cache - switching between lofi / hifi could cause trouble
+        self.channel_list = []
+
         if Prefs[PREFS_LAIKA]:
             Log.Info('EyeTVLive: Laika experimental features enabled')
         
@@ -114,9 +117,7 @@ class EyeTVLive(object):
                 Log.Info('EyeTVLive: validate_prefs: iPhone client settings')
             else:
                 self.headers['X-Safari']   = 'yes'
-                #self.headers['User-Agent'] = 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0'
-                #self.headers['X-App-UUID'] = 'bb98c14885bb94442623ca1afe7b3912'
-                Log.Info('EyeTVLive: validate_prefs: Safari client settings (PREFS_CLIENT:"%s")' % Prefs[PREFS_CLIENT])
+                Log.Info('EyeTVLive: validate_prefs: Safari client settings (PREFS_DEVID:"%s")' % Prefs[PREFS_DEVID])
             
             # first error will bail out
             if not Prefs[PREFS_HOST] or not Prefs[PREFS_PORT]:
@@ -288,10 +289,15 @@ class EyeTVLive(object):
         """
         Tune to `service_id` and redirect to the running stream if possible.
         """
+        try:
+            kbps = long(kbps)
+        except:
+            kbps = 2000
+
         if kbps < 320:
             kbps = 320
-        elif kbps > 2000:
-            kbps = 2000
+        elif kbps > 4540:
+            kbps = 4540
         
         if self.lofi_version or Prefs[PREFS_CLIENT] == 'SAFARI':
             res = self.run_request(URL_TUNE_TO_SAFARI, kbps=kbps, service_id=service_id)
@@ -321,9 +327,6 @@ class EyeTVLive(object):
                                    }
                         Log.Debug('EyeTVLive: stream is ready, redirecting..: %s' % live_url)
 
-                        # FIXME: Laika fails handling the relative http-livestream,
-                        # FIXME: for now we support proxying these requests via
-                        # FIXME: /video/eyetv-live/tune/{xxx} - this needs fixing!!
                         Response.Headers['Cache-Control'] = 'no-cache'
                         self.stream_base = '/'.join(stream_url.split('/')[:-1])
                         
@@ -508,7 +511,7 @@ class EyeTVLive(object):
             if mode == 'channel':
 #                if Client.Platform == ClientPlatform.iOS:
                     d.add(VideoClipObject(
-                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
+                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=Prefs[PREFS_KBPS]),
                           title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
                           summary = summary,
                           rating_key = info['serviceID']
@@ -548,7 +551,7 @@ class EyeTVLive(object):
         """
         if show_about:
             d = MessageContainer('EyeTVLive for Plex',
-"""(c) 2011, some rights reserved
+"""(c) 2012, some rights reserved
   Programming by Rene Koecher
 Graphics design by Peter Flaherty
 """)
@@ -598,8 +601,8 @@ Try to start the local EyeTV in server mode.
             key = Callback(self.gui_setup_menu, show_about=True),
             title='About',
             summary = """         EyeTVLive for Plex
-     Programming by Rene Koecher (c) 2011
- Graphics Design by Peter Flaherty (c) 2011
+     Programming by Rene Koecher (c) 2012
+ Graphics Design by Peter Flaherty (c) 2012
 --------------------------------------------
 EyeTV live core: %s
       EPGParser: %s

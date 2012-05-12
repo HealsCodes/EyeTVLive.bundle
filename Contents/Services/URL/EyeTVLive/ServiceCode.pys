@@ -1,0 +1,158 @@
+# -*- encoding: utf8
+#
+# ServiceCode.pys  - Handle EyeTV stream preparation
+# Copyright (C) 2011 René Köcher <shirk@bitspin.org>
+#
+# This program is free software; you can redistribute it and/or modify it 
+# under the terms of the GNU General Public License as published by the 
+# Free Software Foundation; either version 2 of the License, or 
+# (at your option) any later version.
+#
+# This program is distributed in the hope that it will be useful, but 
+# WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY 
+# or FITNESS FOR A PARTICULAR PURPOSE. 
+# See the GNU General Public License for more details.
+#
+# You should have received a copy of the GNU General Public License along
+# with this program; if not, write to the Free Software Foundation, Inc.,
+# 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
+#
+
+import time
+import pickle
+
+from APIURLs import *
+
+def load_service_exchange():
+    try:
+        data = pickle.loads(String.Decode(Dict[SERVICE_EXCHANGE]))
+    except KeyError:
+        data = {}
+    return data
+
+def run_request(url, default=None, **kwargs):
+    """
+    Run a HTTP-Request returning parsed JSON data oder `default`
+    """
+    data = load_service_exchange()
+    args = dict(kwargs)
+    for k in [ PREFS_HOST, PREFS_PORT, PREFS_DEVID, PREFS_CLIENT ]:
+        args[k] = Prefs[k]
+    
+    if not data['lofi_version'] and not Prefs[PREFS_CLIENT] == 'SAFARI':
+        args[PREFS_TOKEN_TYPE] = Prefs[PREFS_TOKEN_TYPE]
+        if PREFS_TOKEN_TYPE == 'prefs':
+            args[PREFS_TOKEN] = Prefs[PREFS_TOKEN]
+        else:
+            args[PREFS_TOKEN] = Dict[PREFS_TOKEN]
+    else:
+        args[PREFS_TOKEN_TYPE] = ''
+        args[PREFS_TOKEN] = ''
+    
+    try:
+        if 'plain_http' in kwargs and kwargs['plain_http']:
+            try:
+                res = HTTP.Request(url % args, headers=data['headers'])
+            except:
+                res = None
+        else:
+            res = JSON.ObjectFromURL(url % args, headers=data['headers'])
+        if not res:
+            return default
+        return res
+    except Exception, e:
+        Log.Error('EyeTVLive(URL): run_request: failed: %s', e)
+        raise
+        return default
+
+def NormalizeURL(url):
+    if not url.startswith('x-eyetv-live://') \
+       and not url.startswith('x-eyetv-live-prefs://'):
+        Log('EyeTVLive(URL): NormalizeURL: Invalid URL "%s"' % url)
+        return None
+
+    if url.startswith('x-eyetv-live-prefs://'):
+        Log.Debug('EyeTVLive(URL): NormalizeURL: Got Prefs-Update from main..')
+        try:
+            reference = Dict[SERVICE_EXCHANGE]
+        except KeyError:
+            reference = {}
+
+        data = pickle.loads(String.Decode(url.replace('x-eyetv-live-prefs://','')))
+        if data != reference:
+            Log.Debug('EyeTVLive(URL): NormalizeURL: Updating Dict..')
+            Dict[SERVICE_EXCHANGE] = data
+            Dict.Save()
+        return 'x-eyetv-live-res://ok'
+    return url
+
+####################################################################################################
+#def MetadataObjectForURL(url):
+#    HTTP.Headers['Cache-Control'] = 'no-cache'
+#
+#    Log('Sending MetadataForURL(%s)' % url)
+#    # Construct a metadata item
+#    vc = VideoClipObject(
+#      title = 'Running Gag',
+#      summary = 'A running gag..',
+#      tags = ['eyetv-live']
+#      )
+#    Log('-- return')
+#    return vc
+  
+####################################################################################################
+def MediaObjectsForURL(url):
+    data = load_service_exchange()
+    stream_id = url.replace('x-eyetv-live://', '')
+
+    HTTP.Headers['Cache-Control'] = 'no-cache'
+    return [
+        MediaObject(
+            container = Container.MP4,
+            video_codec = VideoCodec.H264,
+            audio_codec = AudioCodec.AAC,
+            audio_channels = 2,
+            optimized_for_streaming = True,
+            parts = [PartObject(key=HTTPLiveStreamURL(Callback(PlayVideo, service_id=stream_id)))],
+        )
+    ]
+
+####################################################################################################
+def PlayVideo(service_id):
+    HTTP.Headers['Cache-Control'] = 'no-cache'
+
+    data = load_service_exchange()
+    if data['lofi_version'] or Prefs[PREFS_CLIENT] == 'SAFARI':
+        res = run_request(URL_TUNE_TO_SAFARI, kbps=long(Prefs[PREFS_KBPS]), service_id=service_id)
+    else:
+        res = run_request(URL_TUNE_TO_IDEV, kbps=long(Prefs[PREFS_KBPS]), service_id=service_id)
+    
+    if not res or not res['success']:
+        Log("EyeTVLive(URL): PlayVideo: Tuning failed.")
+        return None
+    else:
+        # wait until ready
+        stream_url = res['m3u8URL']
+        res = {1:True}
+        time.sleep(1.5) # don't hurry EyeTV..
+        while res:
+            res = run_request(URL_READY)
+            if not res:
+                Log('EyeTVLive(URL): PlayVideo: Failed to switch channels')
+                return None
+            if res['isReadyToStream']:
+                live_url = URL_STREAM_DIRECT % {
+                                        'service_id'      : service_id,
+                                        'eyetv_live_host' : Prefs[PREFS_HOST], 
+                                        'eyetv_live_port' : Prefs[PREFS_PORT],
+                                        'stream_url'      : stream_url
+                }
+
+                Log.Debug('EyeTVLive(URL): PlayVideo: stream is ready, live-url: %s' % live_url)
+                break
+            else:
+                Log.Debug('EyeTVLive(URL): PlayVideo: buffering stream (%f/%f)..',
+                          res['doneEncoding'], res['minEncodingToStartStreaming'])
+                time.sleep(1)
+
+    return Redirect('/video/eyetv-live/tune/INIT_URL_%s' % String.Encode(stream_url))

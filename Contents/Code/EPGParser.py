@@ -19,42 +19,26 @@
 #
 
 import time
-# Doesn't work..
-# from EyeTVLive import URL_EPG_REQUEST, URL_EPG_SHOW_INFO
 
-URL_EPG_REQUEST     = ''
-URL_EPG_SHOW_INFO   = ''
-URL_RECORD_GET     = ''
-URL_RECORD_SET      = ''
-URL_RECORD_DEL      = ''
+from APIURLs import *
 
 class EPGParser(object):
     VERSION = '0.3'
     
-    def __init__(self, request_delegate, base_url, url_channel, url_show, url_rec_get, url_rec_set, url_rec_del):
-        global URL_EPG_REQUEST
-        URL_EPG_REQUEST = url_channel
-        global URL_EPG_SHOW_INFO
-        URL_EPG_SHOW_INFO = url_show
-        global URL_RECORD_GET
-        URL_RECORD_GET = url_rec_get
-        global URL_RECORD_SET
-        URL_RECORD_SET = url_rec_set
-        global URL_RECORD_DEL
-        URL_RECORD_DEL = url_rec_del
+    def __init__(self, request_delegate, base_url):
         Route.Connect(base_url + '/epg/show/{service_id}', self.gui_epg_for_channel)
         Route.Connect(base_url + '/epg/show/{service_id}/{uniqueid}', self.gui_epg_for_show)
         Route.Connect(base_url + '/epg/record/del/{service_id}/{uniqueid}/{rec_id}', self.cancel_recording)
         Route.Connect(base_url + '/epg/record/set/{service_id}/{uniqueid}/{rec_id}', self.schedule_recording)
         
-        self.delegate = request_delegate
         self.epg_start = 0
         self.epg_end = 0
         self.epg_channel_data = {}
         self.epg_detail_data = {}
         self.epg_recordings_data = {}
         self.epg_lock = Thread.Lock()
-    
+        self.delegate = request_delegate
+
     def run_request(self, url, **kwargs):
         return self.delegate.run_request(url, **kwargs)
     

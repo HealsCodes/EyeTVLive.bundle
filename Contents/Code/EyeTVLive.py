@@ -20,48 +20,23 @@
 
 import re
 import time
+import pickle
 import socket
 
 from EPGParser import EPGParser
 from M3U8Parser import M3U8Parser
 from TSStreamServer import TSStreamServer
 
-PREFS_HOST         = 'eyetv_live_host'
-PREFS_PORT         = 'eyetv_live_port'
-PREFS_DEVID        = 'eyetv_live_devid'
-PREFS_CLIENT       = 'eyetv_live_client'
-PREFS_TOKEN        = 'eyetv_live_token'
-PREFS_TOKEN_TYPE   = 'eyetv_live_token_type'
-PREFS_SCANIF       = 'eyetv_live_scanif'
-PREFS_USE_CHUNKED  = 'eyetv_live_chunked'
-PREFS_LAIKA        = 'eyetv_live_laika'  
-PREFS_KBPS         = 'eyetv_live_kbps'
-
-BASE_URL           = 'http://%(eyetv_live_host)s:%(eyetv_live_port)s'
-URL_STATUS         = BASE_URL + '/live/status/0/_%(eyetv_live_devid)s_MAINMENU'
-URL_SEED           = BASE_URL + '/live/seed/0'
-URL_STREAM         = BASE_URL + '/live/stream'
-URL_STREAM_DIRECT  = BASE_URL + '/live/stream/%(stream_url)s'
-URL_TIMEZONE       = BASE_URL + '/live/timeZone/0'
-URL_FAVORITES      = BASE_URL + '/live/favorites/0/_%(eyetv_live_devid)s_FAVORITES'
-URL_CHANNEL_LIST   = BASE_URL + '/live/channels/%(epg_detail)d/0/%(item_base)d/%(item_count)d/_%(eyetv_live_devid)s_CHANNELS'
-URL_TUNE_TO_SAFARI = BASE_URL + '/live/tuneto/1/%(kbps)d/%(service_id)s/_SAFARI_PLAYER'
-URL_TUNE_TO_IDEV   = BASE_URL + '/live/tuneto/6/%(kbps)d/0/1/6/%(service_id)s/_%(eyetv_live_devid)s_PLAYER'
-URL_READY          = BASE_URL + '/live/ready/0/_%(eyetv_live_devid)s_PLAYER'
-URL_RECORD_GET     = BASE_URL + '/live/showstatus/0/%(show_uuid)s/%(show_starttime)s/%(show_stoptime)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
-URL_RECORD_SET     = BASE_URL + '/live/schedule/1/%(show_uuid)s/%(service_id)s/_%(eyetv_live_devid)s_DETAILS'
-URL_RECORD_DEL     = BASE_URL + '/live/deleteschedule/0/%(show_reckey)s/_%(eyetv_live_devid)s_DETAILS'
-URL_EPG_REQUEST    = BASE_URL + '/epg/request/0/%(ts_start)d/%(ts_end)d/%(service_id)s/_%(eyetv_live_devid)s_EPG'
-URL_EPG_SHOW_INFO  = BASE_URL + '/epg/info/1/%(show_uuid)s/_%(eyetv_live_devid)s_EPG'
+from APIURLs import *
 
 class EyeTVLive(object):
-    VERSION = '$git$'
+    VERSION = '0.1.0_beta3'
     
     def __init__(self):
-        Log('Creating EyTVLive service..')
+        Log('EyeTVLive: __init__: Creating EyTVLive service..')
         
         Route.Connect('/video/eyetv-live/list/{mode}', self.gui_channel_list)
-        Route.Connect('/video/eyetv-live/tune/{service_id}-{kbps}', self.tune_to)
+        Route.Connect('/video/eyetv-live/tune/{meta}', self.tune_to)
         Route.Connect('/video/eyetv-live/setup', self.gui_setup_menu)
         Route.Connect('/video/eyetv-live/setup/kickstart', self.kickstart)
         Route.Connect('/video/eyetv-live/setup/tokenscan', self.tokenscan)
@@ -76,25 +51,22 @@ class EyeTVLive(object):
             'Accept-Encoding'     : 'gzip, deflate',
             'Connection'          : 'keep-alive',
         }
+
         self.local_connect = False
         self.lofi_version = False
         self.channel_list = []
-        self.epg = EPGParser(self, '/video/eyetv-live', 
-                                    URL_EPG_REQUEST,
-                                    URL_EPG_SHOW_INFO,
-                                    URL_RECORD_GET,
-                                    URL_RECORD_SET,
-                                    URL_RECORD_DEL)
+        self.epg = EPGParser(self, '/video/eyetv-live')
         self.stream_base = ''
-        
+
         self.validate_prefs(False)
+
         try:
             ObjectContainer(no_cache=True)
             self.old_style_menu=False
-            Log.Info("EyeTVLive: Using new-style menus")
+            Log.Info("EyeTVLive: __init__: Using new-style menus")
         except Framework.FrameworkException:
             self.old_style_menu=True
-            Log.Info("EyeTVLive: Using old-style menus")
+            Log.Info("EyeTVLive: __init__: Using old-style menus")
         
     def validate_prefs(self, force_valid=True):
         """
@@ -102,9 +74,19 @@ class EyeTVLive(object):
         """
         # invalidate the channel cache - switching between lofi / hifi could cause trouble
         self.channel_list = []
+        self.headers = {
+            'User-Agent'          : 'EyeTV/1.2.3 CFNetwork/528.2 Darwin/11.0.0',
+            'Accept'              : '*/*',
+            'X-EyeConnect-Client' : 'iPhoneApp1',
+            'X-EyeConnect-Token'  : '',
+            'X-Device-Name'       : Prefs[PREFS_CLIENT],
+            'X-App-UUID'          : '',
+            'Accept-Encoding'     : 'gzip, deflate',
+            'Connection'          : 'keep-alive',
+        }
 
         if Prefs[PREFS_LAIKA]:
-            Log.Info('EyeTVLive: Laika experimental features enabled')
+            Log.Info('EyeTVLive: validate_prefs: Laika experimental features enabled')
         
         try:
             if Prefs[PREFS_DEVID] == 'IPAD':
@@ -164,12 +146,10 @@ class EyeTVLive(object):
                 self.local_connect = False
             
             # check this last as it's probably going to raise an "error"
-            if Prefs[PREFS_TOKEN_TYPE] == 'prefs':
+            if Prefs[PREFS_TOKEN_TYPE] == 'prefs' and Prefs[PREFS_DEVID] != 'SAFARI':
                 if not Prefs[PREFS_TOKEN] or not re.match('^[0-9a-fA-F]{32}', Prefs[PREFS_TOKEN]):
                     Log.Info('EyeTVLive: validate_prefs: TokenType "prefs" but no token set.')
                     self.lofi_version = True
-                    self.epg.reset()
-                    self.channel_list = []
                     if force_valid:
                         raise RuntimeError(L('No connect token specified.\n\nAdvanced features will be disabled.'))
                 else:
@@ -179,18 +159,35 @@ class EyeTVLive(object):
                 if not Dict[PREFS_TOKEN]:
                     Log.Info('EyeTVLive: validate_prefs: TokenType "scanning" but no token set.')
                     self.lofi_version = True
-                    self.epg.reset()
-                    self.channel_list = []
                     if force_valid:
                         raise RuntimeError(L('No connect token stored, please start the token scan.\n\nAdvanced features will be disabled'))
                 else:
                     self.lofi_version = False
                     self.headers['X-EyeConnect-Token'] = Dict[PREFS_TOKEN]
+
+            if Prefs[PREFS_DEVID] == 'SAFARI':
+                Log('EyeTVLive: validate_prefs: forcing lofi_version for Safari client')
+                self.lofi_version = True
+
             Log('EyeTVLive: validate_prefs: valid, lofi_version=%d', self.lofi_version)
+
         except RuntimeError, e:
             d = MessageContainer(L('Configuration Error'), str(e))
             return d
-    
+        finally:
+            Dict[SERVICE_EXCHANGE] = String.Encode(pickle.dumps(
+                {
+                    'headers'      : dict(self.headers),
+                    'lofi_version' : self.lofi_version
+                }
+            ))
+            Dict.Save()
+
+            self.epg.reset()
+            self.channel_list = []
+
+            URLService.NormalizeURL('x-eyetv-live-prefs://%s' % String.Encode(pickle.dumps(Dict[SERVICE_EXCHANGE])))
+
     def run_request(self, url, default=None, **kwargs):
         """
         Run a HTTP-Request returning parsed JSON data oder `default`
@@ -224,7 +221,7 @@ class EyeTVLive(object):
         except Exception, e:
             Log.Error('EyeTVLive: run_request: failed: %s', e)
             return default
-    
+
     def fetch_channel_list(self):
         """
         Fetch a complete channel list.
@@ -250,10 +247,10 @@ class EyeTVLive(object):
                     need_refresh = True
                     break
             if not need_refresh:
-                Log('EyeTVLive. Using cached channel list')
+                Log('EyeTVLive: fetch_channel_list: Using cached channel list')
                 return self.channel_list;
         
-        Log('EyeTVLive: Requesting channel list (detail=%d)', epg_detail)
+        Log('EyeTVLive: fetch_channel_list: Requesting channel list (detail=%d)', epg_detail)
         res = self.run_request(URL_CHANNEL_LIST, 
                                epg_detail=epg_detail,
                                item_base=base,
@@ -282,77 +279,96 @@ class EyeTVLive(object):
 #        else:
 #            data.sort(cmp=lambda x,y: int(x['channelInfo']['displayNumber']) > int(y['channelInfo']['displayNumber']))
         self.channel_list = data
-        Log('EyeTVLive: Channel list has %d items' % len(self.channel_list))
+        Log('EyeTVLive: fetch_channel_list: Channel list has %d items' % len(self.channel_list))
         return data
     
-    def tune_to(self, service_id, kbps):
-        """
-        Tune to `service_id` and redirect to the running stream if possible.
-        """
-        try:
-            kbps = long(kbps)
-        except:
-            kbps = 2000
+    def tune_to(self, meta):
+        if meta.startswith('INIT_ID_'):
+            service_id = String.Decode(meta.replace('INIT_ID_', ''))
+            Log('EyeTVLive: tune_to: INIT for service_id %s', service_id)
+            try:
+                kbps = long(Prefs[PREFS_KBPS])
+            except:
+                kbps = 2000
 
-        if kbps < 320:
-            kbps = 320
-        elif kbps > 4540:
-            kbps = 4540
-        
-        if self.lofi_version or Prefs[PREFS_CLIENT] == 'SAFARI':
-            res = self.run_request(URL_TUNE_TO_SAFARI, kbps=kbps, service_id=service_id)
-        else:
-            res = self.run_request(URL_TUNE_TO_IDEV, kbps=kbps, service_id=service_id)
-        
-        if not res or not res['success']:
-            d = MessageContainer(L('Internal error'), L('Failed to switch channels.'))
-            return d
-        else:
-            # wait until ready
-            stream_url = res['m3u8URL']
-            res = {1:True}
-            Thread.Sleep(1.5) # don't hurry EyeTV..
-            while res:
-                res = self.run_request(URL_READY)
+            if kbps < 320:
+                kbps = 320
+            elif kbps > 4540:
+                kbps = 4540
+            
+            if self.lofi_version or Prefs[PREFS_CLIENT] == 'SAFARI':
+                res = self.run_request(URL_TUNE_TO_SAFARI, kbps=kbps, service_id=service_id)
+            else:
+                res = self.run_request(URL_TUNE_TO_IDEV, kbps=kbps, service_id=service_id)
+            
+            if not res or not res['success']:
+                Log.Debug('EyeTVLive: tune_to: channel-switch: #res %s', str(res))
+
                 if not res:
-                    d = MessageContainer(L('Internal error'), L('EyeTV failed to switch channels.'))
-                    return d
-                if res['isReadyToStream']:
-                    if Prefs[PREFS_LAIKA]:
-                        live_url = URL_STREAM_DIRECT % {
-                                                'service_id' : service_id,
-                                                'eyetv_live_host' : Prefs[PREFS_HOST], 
-                                                'eyetv_live_port' : Prefs[PREFS_PORT],
-                                                'stream_url' : stream_url
-                                   }
-                        Log.Debug('EyeTVLive: stream is ready, redirecting..: %s' % live_url)
-
-                        Response.Headers['Cache-Control'] = 'no-cache'
-                        self.stream_base = '/'.join(stream_url.split('/')[:-1])
-                        
-                        return Redirect(live_url)
-                    else:
-                        server = TSStreamServer(False,
-                                            URL_STREAM % { 
-                                                'service_id' : service_id,
-                                                'eyetv_live_host' : Prefs[PREFS_HOST],
-                                                'eyetv_live_port' : Prefs[PREFS_PORT]
-                                            }, stream_url)
-                        if server.kickstart():
-                            Response.Headers['Cache-Control'] = 'no-cache'
-                            return Redirect('http://127.0.0.1:2171/stream.mpeg')
-                        else:
-                            d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
-                            return d
+                    d = MessageContainer(L('Internal error'), L('Failed to switch channels.'))
                 else:
-                    Log.Debug('EyeTVLive: buffering stream (%f/%f)..',
-                              res['doneEncoding'], res['minEncodingToStartStreaming'])
-                    Thread.Sleep(1)
+                    d = MessageContainer(L('Internal error'), L('Failed to switch channels.') + ' #errorcode: %d' % res['errorcode'])
+                return d
+            else:
+                # wait until ready
+                stream_url = res['m3u8URL']
+                res = {1:True}
+                Thread.Sleep(1.5) # don't hurry EyeTV..
+                while res:
+                    res = self.run_request(URL_READY)
+                    if not res:
+                        Log.Error('EyeTVLive: tune_to: empty response from EyeTV')
+                        d = MessageContainer(L('Internal error'), L('EyeTV failed to switch channels.'))
+                        return d
+
+                    Log.Debug('EyeTVLive: tune_to: #res { %s }', str(res))
+                    if res['isReadyToStream']:
+                        if Prefs[PREFS_LAIKA]:
+                            live_url = URL_STREAM_DIRECT % {
+                                                    'service_id' : service_id,
+                                                    'eyetv_live_host' : Prefs[PREFS_HOST], 
+                                                    'eyetv_live_port' : Prefs[PREFS_PORT],
+                                                    'stream_url' : stream_url
+                                       }
+                            Log.Debug('EyeTVLive: tune_to: stream is ready')
+
+                            Response.Headers['Cache-Control'] = 'no-cache'
+                            self.stream_base = '/'.join(stream_url.split('/')[:-1])
+                            return Redirect(live_url)
+
+                        else:
+                            server = TSStreamServer(False,
+                                                URL_STREAM % { 
+                                                    'service_id' : service_id,
+                                                    'eyetv_live_host' : Prefs[PREFS_HOST],
+                                                    'eyetv_live_port' : Prefs[PREFS_PORT]
+                                                }, stream_url)
+                            if server.kickstart():
+                                Response.Headers['Cache-Control'] = 'no-cache'
+                                return Redirect('http://127.0.0.1:2171/stream.mpeg')
+                            else:
+                                d = MessageContainer(L('Internal error'), L('Failed to collect the stream.'))
+                                return d
+                    else:
+                        Log.Debug('EyeTVLive: tune_to: buffering stream (%f/%f)..',
+                                  res['doneEncoding'], res['minEncodingToStartStreaming'])
+                        Thread.Sleep(1)
+
+        elif meta.startswith('INIT_URL_'):
+            meta = String.Decode(meta.replace('INIT_URL_', ''))
+            self.stream_base = '/'.join(meta.split('/')[:-1])
+            meta = '/'.join(stream_url.split('/')[-1])
+
+            Log.Debug('EyeTVLive: tune_to: INIT from URLService: stream_base=%s', self.stream_base)
+
+        return self.stream_proxy(meta)
     
     def stream_proxy(self, file):
-        real_url = URL_STREAM % { 'eyetv_live_host' : Prefs[PREFS_HOST], 'eyetv_live_port' : Prefs[PREFS_PORT]}
+        real_url = URL_STREAM % { 'eyetv_live_host' : Prefs[PREFS_HOST],
+                                  'eyetv_live_port' : Prefs[PREFS_PORT]
+                   }
+
         real_url += '/%s/%s' % (self.stream_base, file)
-        Log.Debug('EyeTVLive: stream-proxy => %s' % real_url)
         return Redirect(real_url)
         
     def kickstart(self):
@@ -371,10 +387,10 @@ class EyeTVLive(object):
     def tokenscan(self):
         d = MessageContainer('TokenScanner', '-')
         try:
-            Log('EyeTVLive: Starting scanner on "%s"', Prefs[PREFS_SCANIF])
+            Log('EyeTVLive: tokenscan: Starting scanner on "%s"', Prefs[PREFS_SCANIF])
             scanner = Helper.Process('ScanToken.py', '-i', Prefs[PREFS_SCANIF], stderr=True)
             (out, err) = scanner.communicate()
-            Log('EyeTVLive: Scanner out:\n%s\nEyeTVLive: Scanner err:\n%s\n', out, err)
+            Log('EyeTVLive: tokenscan: Scanner out:\n%s\nEyeTVLive: Scanner err:\n%s\n', out, err)
             if scanner.returncode == 0:
                 token=re.search('(?m).*([0-9a-fA-F]{32,32}).*', err)
                 if token:
@@ -404,7 +420,7 @@ class EyeTVLive(object):
                 try:
                     Helper.Run('SpawnEyeTV')
                 except Exception,e:
-                    Log.Info('SpawnEyeTV failed: %s', e)
+                    Log.Info('EyeTVLive: gui_main_menu: SpawnEyeTV failed: %s', e)
                 status = self.run_request(URL_STATUS)
         
             if not status:
@@ -437,7 +453,7 @@ class EyeTVLive(object):
                 try:
                     Helper.Run('SpawnEyeTV')
                 except Exception,e:
-                    Log.Info('SpawnEyeTV failed: %s', e)
+                    Log.Info('EyeTVLive: gui_main_menu: SpawnEyeTV failed: %s', e)
                 status = self.run_request(URL_STATUS)
         
             if not status:
@@ -509,31 +525,13 @@ class EyeTVLive(object):
                 duration = 1
             
             if mode == 'channel':
-#                if Client.Platform == ClientPlatform.iOS:
-                    d.add(VideoClipObject(
-                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=Prefs[PREFS_KBPS]),
-                          title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
-                          summary = summary,
-                          rating_key = info['serviceID']
-                    ))
-#                else:
-#                    d.add(VideoClipObject(
-#                          key = Callback(self.tune_to, service_id=info['serviceID'], kbps=20000),
-#                          title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
-#                          summary = summary,
-#                          rating_key = info['serviceID']
-#                          ,items = [
-#                            MediaObject(
-#                              parts = [
-#                                PartObject(key=Callback(self.tune_to, service_id=info['serviceID'], kbps=20000))
-#                              ],
-#                              protocols = [Protocol.HTTPMP4Video, Protocol.HTTPVideo, Protocol.HTTPMP4Streaming],
-#                              platforms = [ClientPlatform.iOS],
-#                              video_codec = VideoCodec.H264,
-#                              audio_codec = AudioCodec.AAC
-#                            )
-#                          ]
-#                    ))
+                d.add(VideoClipObject(
+                      #url = HTTPLiveStreamURL(Callback(self.tune_to, meta='INIT_ID_%s' % String.Encode(info['serviceID']))),
+                      key = Callback(self.tune_to, meta='INIT_ID_%s' % String.Encode(info['serviceID'])),
+                      title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),
+                      summary = summary,
+                      rating_key = info['serviceID']
+                ))
             elif mode == 'epg':
                 d.add(DirectoryObject(
                     key = self.epg.callback_for_channel(info['serviceID']),

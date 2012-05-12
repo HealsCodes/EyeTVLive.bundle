@@ -19,6 +19,9 @@
 
 from EyeTVLive import EyeTVLive
 
+# Extend the basic ServicePolicy with DataKit to be able to use Dict[] / Data
+Framework.policies.ServicePolicy.api['Data'] = Framework.api.DataKit
+
 def Start():
     global eyetv_live_service
     eyetv_live_service = EyeTVLive()
@@ -37,7 +40,7 @@ def Start():
     DirectoryObject.thumb = R('icon-default.png')
     DirectoryObject.art = R('background.png')
     VideoClipObject.art = R('background.png')
-    
+
     try:
         ObjectContainer.no_cache = True
     except Framework.FrameworkException:

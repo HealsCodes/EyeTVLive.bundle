@@ -1,5 +1,6 @@
 PREFS_HOST         = 'eyetv_live_host'
 PREFS_PORT         = 'eyetv_live_port'
+PREFS_PASSCODE     = 'eyetv_live_pass'
 PREFS_DEVID        = 'eyetv_live_devid'
 PREFS_CLIENT       = 'eyetv_live_client'
 PREFS_TOKEN        = 'eyetv_live_token'

@@ -302,7 +302,7 @@ class EPGParser(object):
                 duration = detail['duration']
         ))
         d.add(VideoClipObject(
-                key = Callback(self.delegate.tune_to, service_id=service_id, kbps=20000),
+                key = Callback(self.delegate.tune_to, meta='INIT_ID_%s' % String.Encode(service_id)),
                 rating_key = service_id,
                 title = F('Watch %s', channel_data['channelInfo']['name']),
         ))

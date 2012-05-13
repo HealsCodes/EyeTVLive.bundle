@@ -12,6 +12,14 @@
     "default" : "2170"
   },
   {
+    "id"      : "eyetv_live_pass",
+    "label"   : "Password",
+    "type"    : "text",
+    "option"  : "hidden",
+    "default" : "",
+    "secure"  : true
+  },
+  {
     "id"      : "eyetv_live_devid",
     "label"   : "Client Type",
     "type"    : "enum",

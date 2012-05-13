@@ -23,6 +23,11 @@ import time
 import pickle
 import socket
 
+try:
+    from urllib2_new import HTTPError
+except ImportError:
+    from urllib2 import HTTPError
+
 from EPGParser import EPGParser
 from M3U8Parser import M3U8Parser
 from TSStreamServer import TSStreamServer
@@ -192,6 +197,47 @@ class EyeTVLive(object):
         """
         Run a HTTP-Request returning parsed JSON data oder `default`
         """
+        def digest_auth_request(url, headers={}):
+            try:
+                req = HTTP.Request(url, headers=headers)
+                req.load()
+                return req.content 
+            except HTTPError, error:
+                Log(error.headers)
+                auth_header = error.headers.get('WWW-Authenticate', '')
+                if auth_header:
+                    if not auth_header.lower().startswith('digest'):
+                        Log.Error('EyeTVLive: digest_auth_request: Unsupported auth method: \'%s\'', auth_header)
+                        raise
+
+                    realm = re.findall(r'\srealm="(?P<realm>[^"]+)",?\s?', auth_header)
+                    if not realm:
+                        Log.Error('EyeTVLive: digest_auth_request: no realm in request')
+                        raise
+                    else:
+                        realm = realm[-1]
+
+                    nonce = re.findall(r'\snonce="(?P<nonce>[^"]+)",?\s?', auth_header)
+                    if not nonce:
+                        Log.Error('EyeTVLive: digest_auth_request: no nonce in request')
+                        raise
+                    else:
+                        nonce = nonce[-1]
+
+                    uri = re.sub(r'https?://[^/]+', '', url)
+                    ha1 = Hash.MD5('eyetv:%s:%s' % (realm, Prefs[PREFS_PASSCODE]))
+                    ha2 = Hash.MD5('GET:%s' % uri)
+                    response = Hash.MD5('%s:%s:%s' % (ha1, nonce, ha2))
+
+                    headers['Authorization'] = 'Digest username="eyetv", realm="%s", nonce="%s", uri="%s", response="%s"' % (realm, nonce, uri, response)
+
+                    #Log.Debug('Digest-Auth - headers: %s' % str(headers))
+                    req =  HTTP.Request(url, headers=headers)
+                    req.load()
+                    return req.content
+                else:
+                    raise
+
         args = dict(kwargs)
         for k in [ PREFS_HOST, PREFS_PORT, PREFS_DEVID, PREFS_CLIENT ]:
             args[k] = Prefs[k]
@@ -210,16 +256,22 @@ class EyeTVLive(object):
 #            HTTP.ClearCache()
             if 'plain_http' in kwargs and kwargs['plain_http']:
                 try:
-                    res = HTTP.Request(url % args, headers=self.headers)
+                    res = digest_auth_request(url % args, headers=self.headers)
                 except:
                     res = None
             else:
-                res = JSON.ObjectFromURL(url % args, headers=self.headers)
+                #res = JSON.ObjectFromURL(url % args, headers=self.headers)
+                res = JSON.ObjectFromString(digest_auth_request(url % args, headers=self.headers))
             if not res:
                 return default
             return res
+        
+        except HTTPError, he:
+            Log.Error('EyeTVLive: run_request: failed: %s (HTTP: %d, %s)', he.info(), he.getcode(), he.geturl())
+            return default
+
         except Exception, e:
-            Log.Error('EyeTVLive: run_request: failed: %s', e)
+            Log.Error('EyeTVLive: run_request: generic error: %s', e)
             return default
 
     def fetch_channel_list(self):
@@ -357,7 +409,7 @@ class EyeTVLive(object):
         elif meta.startswith('INIT_URL_'):
             meta = String.Decode(meta.replace('INIT_URL_', ''))
             self.stream_base = '/'.join(meta.split('/')[:-1])
-            meta = '/'.join(stream_url.split('/')[-1])
+            meta = '/'.join(meta.split('/')[-1])
 
             Log.Debug('EyeTVLive: tune_to: INIT from URLService: stream_base=%s', self.stream_base)
 

@@ -18,6 +18,7 @@
 # 59 Temple Place, Suite 330, Boston, MA 02111-1307 USA
 #
 
+import re
 import time
 import pickle
 
@@ -35,6 +36,48 @@ def run_request(url, default=None, **kwargs):
     Run a HTTP-Request returning parsed JSON data oder `default`
     """
     data = load_service_exchange()
+    def digest_auth_request(url, headers={}):
+            try:
+                req = HTTP.Request(url, headers=headers)
+                req.load()
+                return req.content 
+            except HTTPError, error:
+                Log(error.headers)
+                auth_header = error.headers.get('WWW-Authenticate', '')
+                if auth_header:
+                    if not auth_header.lower().startswith('digest'):
+                        Log.Error('EyeTVLive: digest_auth_request: Unsupported auth method: \'%s\'', auth_header)
+                        raise
+
+                    realm = re.findall(r'\srealm="(?P<realm>[^"]+)",?\s?', auth_header)
+                    if not realm:
+                        Log.Error('EyeTVLive: digest_auth_request: no realm in request')
+                        raise
+                    else:
+                        realm = realm[-1]
+
+                    nonce = re.findall(r'\snonce="(?P<nonce>[^"]+)",?\s?', auth_header)
+                    if not nonce:
+                        Log.Error('EyeTVLive: digest_auth_request: no nonce in request')
+                        raise
+                    else:
+                        nonce = nonce[-1]
+
+                    uri = re.sub(r'https?://[^/]+', '', url)
+                    ha1 = Hash.MD5('eyetv:%s:%s' % (realm, Prefs[PREFS_PASSCODE]))
+                    ha2 = Hash.MD5('GET:%s' % uri)
+                    response = Hash.MD5('%s:%s:%s' % (ha1, nonce, ha2))
+
+                    headers['Authorization'] = 'Digest username="eyetv", realm="%s", nonce="%s", uri="%s", response="%s"' % (realm, nonce, uri, response)
+
+                    #Log.Debug('Digest-Auth - headers: %s' % str(headers))
+                    req =  HTTP.Request(url, headers=headers)
+                    req.load()
+                    return req.content
+                else:
+                    raise
+
+
     args = dict(kwargs)
     for k in [ PREFS_HOST, PREFS_PORT, PREFS_DEVID, PREFS_CLIENT ]:
         args[k] = Prefs[k]
@@ -52,17 +95,16 @@ def run_request(url, default=None, **kwargs):
     try:
         if 'plain_http' in kwargs and kwargs['plain_http']:
             try:
-                res = HTTP.Request(url % args, headers=data['headers'])
+                res = digest_auth_request(url % args, headers=data['headers'])
             except:
                 res = None
         else:
-            res = JSON.ObjectFromURL(url % args, headers=data['headers'])
+            res = JSON.ObjectFromString(digest_auth_request(url % args, headers=data['headers']))
         if not res:
             return default
         return res
     except Exception, e:
         Log.Error('EyeTVLive(URL): run_request: failed: %s', e)
-        raise
         return default
 
 def NormalizeURL(url):

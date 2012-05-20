@@ -244,10 +244,14 @@ class EPGParser(object):
         """
         Given the current seconds since epoch return a dst-adjusted NSDate version
         """
-        ts = time.localtime(seconds)
-        if ts.tm_isdst == 1:
-            seconds = seconds - 3600
-        return long(seconds - time.mktime(time.strptime('1.1.2001', '%d.%m.%Y')))
+        try:
+            ts = time.localtime(seconds)
+            if ts.tm_isdst == 1:
+                seconds = seconds - 3600
+            return long(seconds - time.mktime(time.strptime('1.1.2001', '%d.%m.%Y')))
+        except Exception, e:
+            Log.Debug("Error: %s", e)
+            return 0
     
     
     def ts_nsdate_to_unix(self, seconds):

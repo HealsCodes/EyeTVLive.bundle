@@ -22,6 +22,7 @@ import re
 import time
 import pickle
 import socket
+import commands
 
 try:
     from urllib2_new import HTTPError
@@ -135,7 +136,6 @@ class EyeTVLive(object):
                         ip = Prefs[PREFS_HOST]
                     try:
                         # try to match the ip against all configured network ips
-                        import commands
                         all_ips = commands.getoutput('/sbin/ifconfig | awk \'/inet6?/{ print $2 }\'')
                         
                         for if_ip in all_ips.split('\n'):
@@ -386,6 +386,7 @@ class EyeTVLive(object):
 
                             Response.Headers['Cache-Control'] = 'no-cache'
                             self.stream_base = '/'.join(stream_url.split('/')[:-1])
+                            Log.Debug('Redirecting: %s', live_url)
                             return Redirect(live_url)
 
                         else:
@@ -578,6 +579,7 @@ class EyeTVLive(object):
             
             if mode == 'channel':
                 d.add(VideoClipObject(
+                      #url = HTTPLiveStreamURL('x-eyetv-live://%s' % info['serviceID']),
                       #url = HTTPLiveStreamURL(Callback(self.tune_to, meta='INIT_ID_%s' % String.Encode(info['serviceID']))),
                       key = Callback(self.tune_to, meta='INIT_ID_%s' % String.Encode(info['serviceID'])),
                       title = '%-4s %s%s' % (info['displayNumber'], info['name'], tagline),

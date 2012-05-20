@@ -186,7 +186,7 @@ class EPGParser(object):
                  L('Actors: ') + detail.get('OTHERS', '-'),
                  L('Produced in: ') + detail.get('COUNTRY', '-'),
                  detail.get('YEAR', '')
-            )
+             )
         else:
             summary = L('<No details available>')
         
@@ -206,8 +206,16 @@ class EPGParser(object):
         tagline = show['ABSTRACT']
         summary = summary
         duration = (long(show['STOPTIME']) - long(show['STARTTIME'])) * 1000
-        
-        return { 'title':title, 'tagline':tagline, 'summary':summary, 'duration':duration, 'rec':record_id }
+
+        res = { 'title':title, 'tagline':tagline, 'summary':summary, 'duration':duration, 'rec':record_id }
+        for k in res:
+            if isinstance(res[k], str):
+                try:
+                    res[k] = unicode(res[k].decode('iso8859-15'))
+                except UnicodeDecodeError:
+                    res[k] = unicode(res[k].decode(errors='ignore'))
+
+        return res
     
     def schedule_recording(self, service_id, uniqueid, rec_id):
         """
